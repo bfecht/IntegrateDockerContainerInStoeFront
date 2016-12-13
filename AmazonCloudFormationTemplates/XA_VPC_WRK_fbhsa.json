@@ -1,0 +1,480 @@
+﻿{
+    "AWSTemplateFormatVersion": "2010-09-09",
+    "Description": "**Version 1.00, 10-10-2016** STEP-WORKER. Customized by Bernd Fecht - bernd.fecht@hs-augsburg.de",
+    "Parameters": {
+        "KeyPairName": {
+            "Description": "Public/private key pairs allow you to securely connect to your instance after it launches",
+            "Type": "String",
+            "Default": "XenCloud"
+        },
+        "XAWRKInstanceType": {
+            "Description": "Type of EC2 instance to launch or XenApp Worker",
+            "Type": "String",
+            "Default": "t2.micro"
+        },
+        "XAWorkerOU": {
+            "Description": "The Organization Unit to place our XenApp Workers into",
+            "Type": "String",
+            "Default": "OU=Workers,OU=DaaS,DC=fbhsaxencloud,DC=net"
+        },
+        "XAWorkerNetBIOSName": {
+            "Description": "NetBIOS name of the XenApp Worker(upto 15 characters)",
+            "Type": "String",
+            "Default": "AWSXAWRK01",
+            "MinLength": "1",
+            "MaxLength": "15",
+            "AllowedPattern": "[a-zA-Z0-9]+"
+        },
+        "KeyName": {
+            "Description": "The EC2 Key Pair to allow SSH access to the instances",
+            "Type": "String",
+            "Default": "XenCloud"
+        },
+        "DomainDNSName": {
+            "Description": "Fully qualified domain name (FQDN) of the forest root domain e.g. corp.example.com",
+            "Type": "String",
+            "Default": "fbhsaxencloud.net",
+            "MinLength": "3",
+            "MaxLength": "25",
+            "AllowedPattern": "[a-zA-Z0-9]+\\..+"
+        },
+        "DomainNetBIOSName": {
+            "Description": "NetBIOS name of the domain (upto 15 characters) for users of earlier versions of Windows e.g. CORP",
+            "Type": "String",
+            "Default": "XENCLOUD",
+            "MinLength": "1",
+            "MaxLength": "15",
+            "AllowedPattern": "[a-zA-Z0-9]+"
+        },
+        "DomainAdminUser": {
+            "Description": "User name for the account that will be added as Domain Administrator. This is separate from the default \"Administrator\" account",
+            "Type": "String",
+            "Default": "XenAdmin",
+            "MinLength": "5",
+            "MaxLength": "25",
+            "AllowedPattern": "[a-zA-Z0-9]*"
+        },
+        "DomainAdminPassword": {
+            "Description": "Password for the domain admin user",
+            "Type": "String",
+            "MinLength": "8",
+            "MaxLength": "32",
+            "AllowedPattern": "(?=^.{6,255}$)((?=.*\\d)(?=.*[A-Z])(?=.*[a-z])|(?=.*\\d)(?=.*[^A-Za-z0-9])(?=.*[a-z])|(?=.*[^A-Za-z0-9])(?=.*[A-Z])(?=.*[a-z])|(?=.*\\d)(?=.*[A-Z])(?=.*[^A-Za-z0-9]))^.*",
+            "NoEcho": "true"
+        },
+        "XAAdminUser": {
+            "Description": "User name for the XenApp Farm Admin Account.",
+            "Type": "String",
+            "Default": "XAFarmAdmin",
+            "MinLength": "5",
+            "MaxLength": "25",
+            "AllowedPattern": "[a-zA-Z0-9]*"
+        },
+        "AD1PrivateIp": {
+            "Description": "Fixed private IP for the first Active Directory server located in AZ1",
+            "Type": "String",
+            "Default": "10.16.3.5"
+        },
+        "AD2PrivateIp": {
+            "Description": "Fixed private IP for the second Active Directory serverr located in AZ2",
+            "Type": "String",
+            "Default": "10.16.4.5"
+        },
+        "DomainMemberSGID": {
+            "Description": "ID of the Domain Member Security Group",
+            "Type": "String",
+            "Default": "sg-39d4e143"
+        },
+        "DesktopWorkerSGID": {
+            "Description": "ID of the Desktop Worker Security Group",
+            "Type": "String",
+            "Default": "sg-c0d4e1ba"
+        },
+        "DesktopSubnet": {
+            "Description": "ID of the XenApp Worker Subnet",
+            "Type": "String",
+            "Default": "subnet-5513a01c"
+        },
+        "XAWRKAMIID": {
+            "Description": "ID of the 64-bit CloudFormation enabled XenApp Golden AMI available for launch in your region",
+            "Type": "String",
+            "Default": "ami-ee7805f9"
+        }
+    },
+    "Resources": {
+        "IAMUser": {
+            "Type": "AWS::IAM::User",
+            "Properties": {
+                "Path": "/",
+                "Policies": [
+                    {
+                        "PolicyName": "root",
+                        "PolicyDocument": {
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": "CloudFormation:DescribeStackResource",
+                                    "Resource": "*"
+                                }
+                            ]
+                        }
+                    }
+                ]
+            }
+        },
+        "IAMUserAccessKey": {
+            "Type": "AWS::IAM::AccessKey",
+            "Properties": {
+                "UserName": {
+                    "Ref": "IAMUser"
+                }
+            }
+        },
+        "XAWorker": {
+            "Type": "AWS::EC2::Instance",
+            "Metadata": {
+                "AWS::CloudFormation::Init": {
+                    "configSets": {
+                        "config": [
+                            "setup",
+                            "rename",
+                            "join",
+                            "install"
+                        ]
+                    },
+                    "setup": {
+                        "files": {
+                            "c:\\cfn\\cfn-credentials": {
+                                "content": {
+                                    "Fn::Join": [
+                                        "",
+                                        [
+                                            "AWSAccessKeyId=",
+                                            {
+                                                "Ref": "IAMUserAccessKey"
+                                            },
+                                            "\n",
+                                            "AWSSecretKey=",
+                                            {
+                                                "Fn::GetAtt": [
+                                                    "IAMUserAccessKey",
+                                                    "SecretAccessKey"
+                                                ]
+                                            },
+                                            "\n"
+                                        ]
+                                    ]
+                                }
+                            },
+                            "c:\\cfn\\cfn-hup.conf": {
+                                "content": {
+                                    "Fn::Join": [
+                                        "",
+                                        [
+                                            "[main]\n",
+                                            "stack=",
+                                            {
+                                                "Ref": "AWS::StackName"
+                                            },
+                                            "\n",
+                                            "credential-file=c:\\cfn\\cfn-credentials\n",
+                                            "region=",
+                                            {
+                                                "Ref": "AWS::Region"
+                                            },
+                                            "\n"
+                                        ]
+                                    ]
+                                }
+                            },
+                            "c:\\cfn\\hooks.d\\cfn-auto-reloader.conf": {
+                                "content": {
+                                    "Fn::Join": [
+                                        "",
+                                        [
+                                            "[cfn-auto-reloader-hook]\n",
+                                            "triggers=post.update\n",
+                                            "path=Resources.XAWorker.Metadata.AWS::CloudFormation::Init\n",
+                                            "action=cfn-init.exe -v -s ",
+                                            {
+                                                "Ref": "AWS::StackName"
+                                            },
+                                            " -r XAWorker",
+                                            " --credential-file c:\\cfn\\cfn-credentials",
+                                            " --region ",
+                                            {
+                                                "Ref": "AWS::Region"
+                                            },
+                                            "\n"
+                                        ]
+                                    ]
+                                }
+                            },
+                            "C:\\cfn\\RunCommand.bat": {
+                                "content": "%~1\nIF %ERRORLEVEL% GTR 10 ( exit /b 1 ) else ( exit /b 0 )"
+                            },
+                            "c:\\cfn\\scripts\\SetDNSOnNIC.ps1": {
+                                "content": {
+                                    "Fn::Join": [
+                                        "\n",
+                                        [
+                                            "param($Gateway1,$Gateway2)",
+                                            "$NICs = Get-WMIObject Win32_NetworkAdapterConfiguration | where{$_.IPEnabled -eq \"TRUE\"}",
+                                            "\n",
+                                            "Foreach($NIC in $NICs) {$DNSServers = \"$Gateway1\",\"$Gateway2\"",
+                                            "\n",
+                                            "$NIC.SetDNSServerSearchOrder($DNSServers)",
+                                            "\n",
+                                            "$NIC.SetDynamicDNSRegistration(\"TRUE\")}",
+                                            "\n"
+                                        ]
+                                    ]
+                                }
+                            },
+                            "C:\\cfn\\scripts\\RenameComputer.ps1": {
+                                "content": {
+                                    "Fn::Join": [
+                                        "",
+                                        [
+                                            "param ($name)",
+                                            "\n",
+                                            "$sysInfo = Get-WmiObject -Class Win32_ComputerSystem",
+                                            "\n",
+                                            "$sysInfo.Rename($name)",
+                                            "\n"
+                                        ]
+                                    ]
+                                }
+                            },
+                            "C:\\cfn\\scripts\\PSISE.ps1": {
+                                "content": {
+                                    "Fn::Join": [
+                                        "",
+                                        [
+                                            "import-module servermanager",
+                                            "\n",
+                                            "add-windowsfeature powershell-ise",
+                                            "\n"
+                                        ]
+                                    ]
+                                }
+                            }
+                        }
+                    },
+                    "rename": {
+                        "commands": {
+                            "1-execute-powershell-script-RenameComputer": {
+                                "command": {
+                                    "Fn::Join": [
+                                        "",
+                                        [
+                                            "powershell.exe ",
+                                            "-ExecutionPolicy",
+                                            " Unrestricted",
+                                            " C:\\cfn\\scripts\\RenameComputer.ps1 ",
+                                            {
+                                                "Ref": "XAWorkerNetBIOSName"
+                                            }
+                                        ]
+                                    ]
+                                }
+                            },
+                            "2-reboot": {
+                                "command": "shutdown -r -t 1"
+                            }
+                        }
+                    },
+                    "join": {
+                        "commands": {
+                            "1-set-dns-on-nic": {
+                                "command": {
+                                    "Fn::Join": [
+                                        "",
+                                        [
+                                            "powershell.exe ",
+                                            "-ExecutionPolicy",
+                                            " Unrestricted",
+                                            " c:\\cfn\\scripts\\SetDNSOnNIC.ps1 ",
+                                            {
+                                                "Ref": "AD1PrivateIp"
+                                            },
+                                            " ",
+                                            {
+                                                "Ref": "AD2PrivateIp"
+                                            }
+                                        ]
+                                    ]
+                                }
+                            },
+                            "2-join-domain": {
+                                "command": {
+                                    "Fn::Join": [
+                                        "",
+                                        [
+                                            "NETDOM join localhost /Domain:",
+                                            {
+                                                "Ref": "DomainDNSName"
+                                            },
+                                            " /userd:",
+                                            {
+                                                "Ref": "DomainAdminUser"
+                                            },
+                                            " /passwordd:",
+                                            {
+                                                "Ref": "DomainAdminPassword"
+                                            },
+                                            " /OU:",
+                                            {
+                                                "Ref": "XAWorkerOU"
+                                            },
+                                            " /reboot"
+                                        ]
+                                    ]
+                                },
+                                "waitAfterCompletion": "forever"
+                            },
+                            "3-add-local-admin": {
+                                "command": {
+                                    "Fn::Join": [
+                                        "",
+                                        [
+                                            "net localgroup \"Administrators\" \"",
+                                            {
+                                                "Ref": "DomainNetBIOSName"
+                                            },
+                                            "\\",
+                                            {
+                                                "Ref": "DomainAdminUser"
+                                            },
+                                            "\" /add"
+                                        ]
+                                    ]
+                                },
+                                "waitAfterCompletion": "0"
+                            },
+                            "4-add-XA-admin": {
+                                "command": {
+                                    "Fn::Join": [
+                                        "",
+                                        [
+                                            "net localgroup \"Administrators\" \"",
+                                            {
+                                                "Ref": "DomainNetBIOSName"
+                                            },
+                                            "\\",
+                                            {
+                                                "Ref": "XAAdminUser"
+                                            },
+                                            "\" /add"
+                                        ]
+                                    ]
+                                },
+                                "waitAfterCompletion": "0"
+                            }
+                        }
+                    },
+                    "install": {
+                        "commands": {
+                            "1-execute-powershell-script-PSISE": {
+                                "command": {
+                                    "Fn::Join": [
+                                        "",
+                                        [
+                                            "powershell.exe ",
+                                            "-ExecutionPolicy",
+                                            " Unrestricted",
+                                            " C:\\cfn\\scripts\\PSISE.ps1"
+                                        ]
+                                    ]
+                                },
+                                "waitAfterCompletion": "0"
+                            }
+                        }
+                    }
+                }
+            },
+            "Properties": {
+                "SecurityGroups": [
+                    {
+                        "Ref": "DomainMemberSGID"
+                    },
+                    {
+                        "Ref": "DesktopWorkerSGID"
+                    }
+                ],
+                "ImageId": {
+                    "Ref": "XAWRKAMIID"
+                },
+                "InstanceType": {
+                    "Ref": "XAWRKInstanceType"
+                },
+                "BlockDeviceMappings": [
+                    {
+                        "DeviceName": "/dev/sdb",
+                        "VirtualName": "ephemeral0"
+                    }
+                ],
+                "SubnetId": {
+                    "Ref": "DesktopSubnet"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Ref": "XAWorkerNetBIOSName"
+                        }
+                    }
+                ],
+                "KeyName": {
+                    "Ref": "KeyPairName"
+                },
+                "UserData": {
+                    "Fn::Base64": {
+                        "Fn::Join": [
+                            "",
+                            [
+                                "<script>\n",
+                                "cfn-init.exe -v -c config -s ",
+                                {
+                                    "Ref": "AWS::StackName"
+                                },
+                                " -r XAWorker ",
+                                " --access-key ",
+                                {
+                                    "Ref": "IAMUserAccessKey"
+                                },
+                                " --secret-key ",
+                                {
+                                    "Fn::GetAtt": [
+                                        "IAMUserAccessKey",
+                                        "SecretAccessKey"
+                                    ]
+                                },
+                                " --region ",
+                                {
+                                    "Ref": "AWS::Region"
+                                },
+                                "\n",
+                                "SCHTASKS /Create /SC MINUTE /MO 10 /TN cfn-hup /RU SYSTEM /TR \"cfn-hup.exe -v --no-daemon\"",
+                                "\n",
+                                "</script>"
+                            ]
+                        ]
+                    }
+                }
+            }
+        }
+    },
+    "Outputs": {
+        "LocalAdmin": {
+            "Value": "Administrator",
+            "Description": "Please retrieve the Administrator password of the instances"
+        },
+        "XAWorkerNetBIOSName": {
+            "Value": {
+                "Ref": "XAWorkerNetBIOSName"
+            },
+            "Description": "NetBIOS name of the XenApp Worker instance"
+        }
+    }
+}

@@ -1,0 +1,49 @@
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Description": "Example Template for VPC Creation",
+  "Parameters": {
+    "KeyPairName": {
+      "Description": "Public/private key pairs allow you to securely connect to your instance after it launches",
+      "Type": "String"
+    },
+    "VPCCIDR": {
+      "Description": "CIDR Block for the VPC",
+      "Type": "String",
+      "Default": "10.16.0.0/16",
+      "AllowedPattern": "[a-zA-Z0-9]+\\..+"
+    },
+    "VPCName": {
+      "Default": "XenApp - XenDesktop 7.x VPC",
+      "Description": "The name of the Virtual Private Cloud",
+      "Type": "String"
+    }
+  },
+  "Resources": { 
+    "VPC": {
+      "Type": "AWS::EC2::VPC",
+      "Properties": {
+        "CidrBlock": {
+          "Ref": "VPCCIDR"
+        },
+        "Tags": [
+          {
+            "Key": "Application",
+            "Value": {
+              "Ref": "AWS::StackName"
+            }
+          },
+          {
+            "Key": "Network",
+            "Value": "Public"
+          },
+          {
+            "Key": "Name",
+            "Value": {
+              "Ref": "VPCName"
+            }
+          }
+        ]
+      }
+    }
+  }
+ }

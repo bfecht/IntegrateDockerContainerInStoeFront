@@ -1,0 +1,1079 @@
+{
+  "AWSTemplateFormatVersion" : "2010-09-09",
+
+  "Description" : "**Version 1.00, 10-10-2016** STEP-SF This template creates and installs the StoreFront base infrastructure into a subnet inside a VPC. This template is a reference to the official template provided by Citrix, available under https://s3.amazonaws.com/cf-XenDesktop/RA/XD76_VPC_SF.json. It is customized for free tier usage on Amazon AWS and got fixed, by using the right AMI's for the server images. Customized by Bernd Fecht - bernd.fecht@hs-augsburg.de",
+
+  "Parameters" : {
+
+        "KeyPairName" : {
+            "Description" : "Public/private key pairs allow you to securely connect to your instance after it launches",
+            "Type"        : "String",
+            "Default"     : "XenCloud"
+        },
+		"SFInstanceType" : {
+			"Description" : "Amazon EC2 instance type for the XenDesktop 7.6 StoreFront Instances",
+			"Type" : "String",
+			"Default" : "t2.micro",
+			"AllowedValues" : [ "t2.micro"]
+		},
+		"DomainDNSName":{
+            "Description":"Fully qualified domain name (FQDN) to be used for the DHCP scop e.g. xencloud.net",
+            "Type":"String",
+            "Default":"fbhsaxencloud.net",
+            "MinLength":"3",
+            "MaxLength":"25",
+            "AllowedPattern":"[a-zA-Z0-9]+\\..+"
+        },
+		"DomainNetBIOSName"   : {
+            "Description" : "NetBIOS name for the domain (XENCLOUD)",
+            "Type"        : "String",
+            "Default"     : "XENCLOUD"
+        },
+        "SF1ServerNetBIOSName" : {
+            "Description" : "NetBIOS name of the 1st XenDesktop StoreFront Server (upto 15 characters)",
+            "Type"        : "String",
+            "Default"     : "StoreFront1",
+            "MinLength"   : "1",
+            "MaxLength"   : "15",
+            "AllowedPattern" : "[a-zA-Z0-9]+"
+        },
+        "SF2ServerNetBIOSName" : {
+            "Description" : "NetBIOS name of the 2nd XenDesktop StoreFront Server (upto 15 characters)",
+            "Type"        : "String",
+            "Default"     : "StoreFront2",
+            "MinLength"   : "1",
+            "MaxLength"   : "15",
+            "AllowedPattern" : "[a-zA-Z0-9]+"
+        },
+        "ADServerNetBIOSName1"  : {
+            "Description" : "NetBIOS name of the existing Domain Controller in AZ1",
+            "Type"        : "String",
+            "Default"     : "DC1",
+            "MinLength"   : "1",
+            "MaxLength"   : "15",
+            "AllowedPattern" : "[a-zA-Z0-9]+"
+        },
+        "ADServerNetBIOSName2"  : {
+            "Description" : "NetBIOS name of the existing Domain Controller in AZ2",
+            "Type"        : "String",
+            "Default"     : "DC2",
+            "MinLength"   : "1",
+            "MaxLength"   : "15",
+            "AllowedPattern" : "[a-zA-Z0-9]+"
+        },
+        "DomainAdminUser"      : {
+            "Description" : "User name for the account that will be added as Domain Administrator. This is separate from the default \"Administrator\" account",
+            "Type"        : "String",
+            "Default"     : "XenAdmin",
+            "MinLength"   : "5",
+            "MaxLength"   : "25",
+            "AllowedPattern" : "[a-zA-Z0-9]*"
+        },
+        "DomainAdminPassword"  : {
+            "Description" : "Password for the domain admin user. Must be at least 8 characters containing letters, numbers and symbols",
+            "Type"        : "String",
+            "MinLength"   : "8",
+            "MaxLength"   : "32",
+            "AllowedPattern" : "(?=^.{6,255}$)((?=.*\\d)(?=.*[A-Z])(?=.*[a-z])|(?=.*\\d)(?=.*[^A-Za-z0-9])(?=.*[a-z])|(?=.*[^A-Za-z0-9])(?=.*[A-Z])(?=.*[a-z])|(?=.*\\d)(?=.*[A-Z])(?=.*[^A-Za-z0-9]))^.*",
+            "NoEcho"         : "True"
+        },
+        "ADServer1PrivateIp"        : {
+            "Description" : "Fixed private IP for the first existing Active Directory server located in AZ1",
+            "Type"        : "String",
+            "Default"     : "10.16.3.5"
+        },
+        "ADServer2PrivateIp"        : {
+            "Description" : "Fixed private IP for the second existing Active Directory serverr located in AZ2",
+            "Type"        : "String",
+            "Default"     : "10.16.4.5"
+        },
+        "DomainMemberSGID"          : {
+            "Description" : "ID of the Domain Member Security Group (e.g., sg-7f16e910)",
+            "Type"        : "String",
+            "Default"     : "sg-39d4e143"
+        },
+        "SFSGID"          : {
+            "Description" : "ID of the XenDesktop StoreFront Security Group (e.g., sg-7f16e910)",
+            "Type"        : "String",
+            "Default"     : "sg-e8d4e192"
+        },
+        "WebSubnet1Id"          : {
+            "Description" : "ID of the subnet you want to provision the first StoreFront server into (e.g., subnet-5413a01d)",
+            "Type"        : "String",
+            "Default"     : "subnet-5413a01d"
+        },
+        "WebSubnet2Id"          : {
+            "Description" : "ID of the subnet you want to provision the second StoreFront server into (e.g., subnet-cbca0c90)",
+            "Type"        : "String",
+            "Default"     : "subnet-cbca0c90"
+        },
+		"Web1CIDR":{
+            "Description":"CIDR Block for StoreFront/Web Subnet 1 located in AZ1",
+            "Type":"String",
+            "Default":"10.16.7.0/24",
+            "AllowedPattern":"[a-zA-Z0-9]+\\..+"
+        },
+		"Web2CIDR":{
+            "Description":"CIDR Block for StoreFront/Web Subnet 2 located in AZ2",
+            "Type":"String",
+            "Default":"10.16.8.0/24",
+            "AllowedPattern":"[a-zA-Z0-9]+\\..+"
+        }
+	},
+ 	"Mappings" : {
+        "AWSInstanceType2Arch" : {
+            "t2.micro"  : {
+                "Arch" : "64"
+            },
+            "t2.small"  : {
+                "Arch" : "64"
+            },
+            "t2.medium" : {
+                "Arch" : "64"
+            },
+            "t2.large" : {
+                "Arch" : "64"
+            },
+            "m4.large" : {
+                "Arch" : "64"
+            },
+            "m4.xlarge" : {
+                "Arch" : "64"
+            },
+            "m3.medium"  : {
+                "Arch" : "64"
+            },
+            "m3.large"  : {
+                "Arch" : "64"
+            },
+            "m3.xlarge"  : {
+                "Arch" : "64"
+            },
+            "c4.large"  : {
+                "Arch" : "64"
+            },
+            "c4.xlarge"  : {
+                "Arch" : "64"
+            },
+            "c4.2xlarge"  : {
+                "Arch" : "64"
+            },
+			"c3.large"  : {
+                "Arch" : "64"
+            },
+            "c3.xlarge"  : {
+                "Arch" : "64"
+            },
+            "c3.2xlarge"  : {
+                "Arch" : "64"
+            },
+			"r3.large"  : {
+                "Arch" : "64"
+            },
+            "r3.xlarge"  : {
+                "Arch" : "64"
+            }
+            
+        },
+        "AWSRegionArch2AMI": {
+            "us-east-1": {
+                "64": "ami-ee7805f9"
+            },
+            "us-west-2": {
+                "64": "ami-c06b24a0"
+            },
+            "us-west-1": {
+                "64": "ami-2827f548"
+            },
+            "eu-west-1": {
+                "64": "ami-9b81f8e8"
+            },
+            "eu-central-1": {
+                "64": "ami-7248ba1d"
+            },
+            "ap-southeast-1": {
+                "64": "ami-fffd2c9e"
+            },
+            "ap-northeast-1": {
+                "64": "ami-ee20f580"
+            },
+            "ap-northeast-2": {
+                "64": "ami-ac5389cf"
+            },
+            "ap-southeast-2": {
+                "64": "ami-899eafea"
+            },
+            "sa-east-1": {
+                "64": "ami-8e2fbfe2"
+            }
+        }
+	},
+  "Resources" : {
+		"SF1":{
+			"Type":"AWS::EC2::Instance",
+            "Metadata" : {
+                "AWS::CloudFormation::Init" : {
+                    "configSets" : {
+                        "config" : [
+                            "CFNsetup",
+                            "rename",
+                            "join",
+                            "installSF",
+                            "finalize"
+                        ]
+                    },
+                    "CFNsetup"   : {
+                        "files" : {
+                            "c:\\cfn\\cfn-hup.conf" : {
+                                "content" : {
+                                    "Fn::Join" : [
+                                        "",
+                                        [
+                                            "[main]\n",
+                                            "stack=",
+                                            {
+                                                "Ref" : "AWS::StackId"
+                                            },
+                                            "\n",
+                                            "region=",
+                                            {
+                                                "Ref" : "AWS::Region"
+                                            },
+                                            "\n"
+                                        ]
+                                    ]
+                                }
+                            },
+                            "c:\\cfn\\hooks.d\\cfn-auto-reloader.conf" : {
+                                "content" : {
+                                    "Fn::Join" : [
+                                        "",
+                                        [
+                                            "[cfn-auto-reloader-hook]\n",
+                                            "triggers=post.update\n",
+                                            "path=Resources.SF1.Metadata.AWS::CloudFormation::Init\n",
+                                            "action=cfn-init.exe -v -s ",
+                                            {
+                                                "Ref" : "AWS::StackId"
+                                            },
+                                            " -r SF1",
+                                            " --region ",
+                                            {
+                                                "Ref" : "AWS::Region"
+                                            },
+                                            "\n"
+                                        ]
+                                    ]
+                                }
+                            }
+                        },
+                        "services" : {
+                            "windows" : {
+                                "cfn-hup" : {
+                                    "enabled" : "true",
+                                    "ensureRunning" : "true",
+                                    "files"         : [
+                                        "c:\\cfn\\cfn-hup.conf",
+                                        "c:\\cfn\\hooks.d\\cfn-auto-reloader.conf"
+                                    ]
+                                }
+                            }
+                        },
+						"commands" : {
+                            "a-set-execution-policy" : {
+                                "command" : {
+                                    "Fn::Join" : [
+                                        "",
+                                        [
+                                            "powershell.exe -command Set-ExecutionPolicy RemoteSigned -Force"
+                                        ]
+                                    ]
+                                },
+                                "waitAfterCompletion" : "0"
+                            }
+                        }
+                    },
+                    "rename"     : {
+                        "commands" : {
+                            "1-execute-powershell-script-RenameComputer" : {
+                                "command" : {
+                                    "Fn::Join" : [
+                                        "",
+                                        [
+                                            "powershell.exe -Command Rename-Computer -NewName ",
+                                            {
+                                                "Ref" : "SF1ServerNetBIOSName"
+                                            },
+                                            " -Restart"
+                                        ]
+                                    ]
+                                },
+                                "waitAfterCompletion" : "forever"
+                            }
+                        }
+                    },
+                    "join"       : {
+                        "commands" : {
+                            "a-set-dns-servers" : {
+                                "command" : {
+                                    "Fn::Join" : [
+                                        "",
+                                        [
+                                            "powershell.exe -Command ",
+                                            "\"",
+                                            "Get-NetAdapter | Set-DnsClientServerAddress -ServerAddresses ",
+                                            {
+                                                "Ref" : "ADServer1PrivateIp"
+                                            },
+                                            ",",
+                                            {
+                                                "Ref" : "ADServer2PrivateIp"
+                                            },
+                                            "\""
+                                        ]
+                                    ]
+                                },
+                                "waitAfterCompletion" : "30"
+                            },
+                            "b-join-domain"     : {
+                                "command" : {
+                                    "Fn::Join" : [
+                                        "",
+                                        [
+                                            "powershell.exe ",
+                                            "-Command \"",
+                                            "Add-Computer -DomainName ",
+                                            {
+                                                "Ref" : "DomainDNSName"
+                                            },
+                                            " -Credential ",
+                                            "(New-Object System.Management.Automation.PSCredential('",
+                                            {
+                                                "Ref" : "DomainNetBIOSName"
+                                            },
+                                            "\\",
+                                            {
+                                                "Ref" : "DomainAdminUser"
+                                            },
+                                            "',",
+                                            "(ConvertTo-SecureString ",
+                                            {
+                                                "Ref" : "DomainAdminPassword"
+                                            },
+                                            " -AsPlainText -Force))) ",
+                                            "-Restart\""
+                                        ]
+                                    ]
+                                },
+                                "waitAfterCompletion" : "forever"
+                            }
+                        }
+                    },
+                    "installSF"       : {
+                        "files" : {
+                            "C:\\cfn\\scripts\\AddUserToGroup.ps1" : {
+                                "content" : {
+                                    "Fn::Join" : [
+                                        "",
+                                        [
+                                            "Param(",
+                                            "\n",
+                                            "[Parameter(Mandatory=$True)]",
+                                            "\n",
+                                            "[string]$ServerName,",
+                                            "\n",
+                                            "[Parameter(Mandatory=$True)]",
+                                            "\n",
+                                            "[string]$GroupName,",
+                                            "\n",
+                                            "[Parameter(Mandatory=$True)]",
+                                            "\n",
+                                            "[string]$DomainNetBIOSName,",
+                                            "\n",
+                                            "[Parameter(Mandatory=$True)]",
+                                            "\n",
+                                            "[string]$UserName",
+                                            "\n",
+                                            ")",
+                                            "$de = [ADSI]\"WinNT://$ServerName/$GroupName,group\"",
+                                            "\n",
+                                            "$de.psbase.Invoke(\"Add\",([ADSI]\"WinNT://$DomainNetBIOSName/$UserName\").path)",
+                                            "\n"
+                                        ]
+                                    ]
+                                }
+                            },
+                            "C:\\Users\\Default\\Desktop\\InstallSF.bat" : {
+                                "content" : {
+                                    "Fn::Join" : [
+                                        "",
+                                        [
+											"powershell.exe -command Install-WindowsFeature NET-Framework-Core",
+											"\n",
+                                            "powershell.exe -command \"dir \\\\",
+                                            {
+                                                "Ref" : "ADServerNetBIOSName1"
+                                            },
+                                            "\\XDinstall\\*.iso | Mount-DiskImage\"",
+                                            "\n",
+											"\"",
+											"D:\\X64\\XenDesktop Setup\\XENDESKTOPSERVERSETUP.EXE",
+											"\" ",
+                                            "/COMPONENTS ",
+                                            "STOREFRONT ",
+                                            "/PASSIVE ",
+                                            "/NOREBOOT ",
+                                            "/CONFIGURE_FIREWALL ",
+                                            "\n"
+                                        ]
+                                    ]
+                                }
+                            }
+                        },
+                        "commands" : {
+                            "a-execute-powershell-script-AddUserToGroup" : {
+                                "command" : {
+                                    "Fn::Join" : [
+                                        "",
+                                        [
+                                            "powershell.exe ",
+                                            "-ExecutionPolicy",
+                                            " RemoteSigned",
+                                            " C:\\cfn\\scripts\\AddUserToGroup.ps1 -UserName ",
+                                            {
+                                                "Ref" : "DomainAdminUser"
+                                            },
+                                            " -ServerName ",
+                                            {
+                                                "Ref" : "SF1ServerNetBIOSName"
+                                            },
+                                            " -DomainNetBIOSName ",
+                                            {
+                                                "Ref" : "DomainNetBIOSName"
+                                            },
+                                            " -GroupName \"Administrators\"",
+                                            "\n"
+                                        ]
+                                    ]
+                                },
+                                "waitAfterCompletion" : "0"
+                            },
+                            "b-enable-autologon"                         : {
+                                "command" : {
+                                    "Fn::Join" : [
+                                        "",
+                                        [
+                                            "powershell.exe -Command ",
+                                            "\"New-ItemProperty -Path 'HKLM:\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Winlogon' -Name AutoAdminLogon -Value 1",
+                                            ";",
+                                            "New-ItemProperty -Path 'HKLM:\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Winlogon' -Name DefaultUserName -Value ",
+                                            {
+                                                "Ref" : "DomainAdminUser"
+                                            },
+                                            "@",
+                                            {
+                                                "Ref" : "DomainDNSName"
+                                            },
+                                            " | out-null",
+                                            ";",
+                                            "New-ItemProperty -Path 'HKLM:\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Winlogon' -Name DefaultPassword -Value ",
+                                            {
+                                                "Ref" : "DomainAdminPassword"
+                                            },
+                                            "\""
+                                        ]
+                                    ]
+                                },
+                                "waitAfterCompletion" : "0"
+                            },
+                            "c-set-startup-script"                       : {
+                                "command" : {
+                                    "Fn::Join" : [
+                                        "",
+                                        [
+                                            "powershell.exe -Command ",
+                                            "\"New-ItemProperty -Path HKLM:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\RunOnce -Name InstallSF -Value C:\\Users\\Default\\Desktop\\InstallSF.bat",
+                                            "\""
+                                        ]
+                                    ]
+                                },
+                                "waitAfterCompletion" : "0"
+                            },
+                            "d-reboot"                                   : {
+                                "command" : {
+                                    "Fn::Join" : [
+                                        "",
+                                        [
+                                            "powershell.exe -Command Restart-Computer -Force"
+                                        ]
+                                    ]
+                                },
+                                "waitAfterCompletion" : "forever"
+                            },
+                            "e-cleanup-registry"                         : {
+                                "command" : {
+                                    "Fn::Join" : [
+                                        "",
+                                        [
+                                            "powershell.exe -Command ",
+                                            "\"Remove-ItemProperty -Path 'HKLM:\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Winlogon' -Name AutoAdminLogon",
+                                            ";",
+                                            "Remove-ItemProperty -Path 'HKLM:\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Winlogon' -Name DefaultUserName",
+                                            ";",
+                                            "Remove-ItemProperty -Path 'HKLM:\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Winlogon' -Name DefaultPassword",
+                                            "\""
+                                        ]
+                                    ]
+                                },
+                                "waitAfterCompletion" : "900"
+                            }
+                        }
+                    },
+                    "finalize"         : {
+                        "commands" : {
+                            "1-signal-success" : {
+                                "command" : {
+                                    "Fn::Join" : [
+                                        "",
+                                        [
+                                            "cfn-signal.exe -e 0 \"",
+                                            {
+                                                "Ref" : "SF1WaitHandle"
+                                            },
+                                            "\""
+                                        ]
+                                    ]
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+			"Properties":{
+                "ImageId" : {
+                    "Fn::FindInMap" : [
+                        "AWSRegionArch2AMI",
+                        {
+                            "Ref" : "AWS::Region"
+                        },
+                        {
+                            "Fn::FindInMap" : [
+                                "AWSInstanceType2Arch",
+                                {
+                                    "Ref" : "SFInstanceType"
+                                },
+                                "Arch"
+                            ]
+                        }
+                    ]
+                },
+                "InstanceType" : {
+                    "Ref" : "SFInstanceType"
+                },
+                "NetworkInterfaces" : [
+                    {
+                        "DeleteOnTermination" : "true",
+                        "DeviceIndex"         : 0,
+                        "SubnetId"            : {
+                            "Ref" : "WebSubnet1Id"
+                        },
+                        "GroupSet"            : [
+                            {
+                                "Ref" : "DomainMemberSGID"
+                            },
+							{
+								"Ref" : "SFSGID"
+							}
+                        ]
+                    }
+                ],
+				"Tags":[
+					{
+						"Key":"Name",
+						"Value":{
+							"Ref":"SF1ServerNetBIOSName"
+						}
+					}	
+				],
+				"KeyName":{
+					"Ref":"KeyPairName"
+				},
+                "UserData"            : {
+                    "Fn::Base64" : {
+                        "Fn::Join" : [
+                            "",
+                            [
+                                "<script>\n",
+                                "cfn-init.exe -v -c config -s ",
+                                {
+                                    "Ref" : "AWS::StackId"
+                                },
+                                " -r SF1 ",
+                                " --region ",
+                                {
+                                    "Ref" : "AWS::Region"
+                                },
+                                "\n",
+                                "</script>"
+                            ]
+                        ]
+                    }
+                }
+			}
+      },
+		"SF2":{
+			"Type":"AWS::EC2::Instance",
+			"Metadata":{
+				"AWS::CloudFormation::Init":{
+					"configSets":{
+						"config":[
+							"CFNsetup",
+							"rename",
+							"join",
+							"installSF",
+							"finalize"
+						]
+					},
+                    "CFNsetup"   : {
+                        "files" : {
+                            "c:\\cfn\\cfn-hup.conf" : {
+                                "content" : {
+                                    "Fn::Join" : [
+                                        "",
+                                        [
+                                            "[main]\n",
+                                            "stack=",
+                                            {
+                                                "Ref" : "AWS::StackId"
+                                            },
+                                            "\n",
+                                            "region=",
+                                            {
+                                                "Ref" : "AWS::Region"
+                                            },
+                                            "\n"
+                                        ]
+                                    ]
+                                }
+                            },
+                            "c:\\cfn\\hooks.d\\cfn-auto-reloader.conf" : {
+                                "content" : {
+                                    "Fn::Join" : [
+                                        "",
+                                        [
+                                            "[cfn-auto-reloader-hook]\n",
+                                            "triggers=post.update\n",
+                                            "path=Resources.SF2.Metadata.AWS::CloudFormation::Init\n",
+                                            "action=cfn-init.exe -v -s ",
+                                            {
+                                                "Ref" : "AWS::StackId"
+                                            },
+                                            " -r SF2",
+                                            " --region ",
+                                            {
+                                                "Ref" : "AWS::Region"
+                                            },
+                                            "\n"
+                                        ]
+                                    ]
+                                }
+                            }
+                        },
+                        "services" : {
+                            "windows" : {
+                                "cfn-hup" : {
+                                    "enabled" : "true",
+                                    "ensureRunning" : "true",
+                                    "files"         : [
+                                        "c:\\cfn\\cfn-hup.conf",
+                                        "c:\\cfn\\hooks.d\\cfn-auto-reloader.conf"
+                                    ]
+                                }
+                            }
+                        },
+						"commands" : {
+                            "a-set-execution-policy" : {
+                                "command" : {
+                                    "Fn::Join" : [
+                                        "",
+                                        [
+                                            "powershell.exe -command Set-ExecutionPolicy RemoteSigned -Force"
+                                        ]
+                                    ]
+                                },
+                                "waitAfterCompletion" : "0"
+                            }
+                        }
+                    },
+                    "rename"     : {
+                        "commands" : {
+                            "1-execute-powershell-script-RenameComputer" : {
+                                "command" : {
+                                    "Fn::Join" : [
+                                        "",
+                                        [
+                                            "powershell.exe -Command Rename-Computer -NewName ",
+                                            {
+                                                "Ref" : "SF2ServerNetBIOSName"
+                                            },
+                                            " -Restart"
+                                        ]
+                                    ]
+                                },
+                                "waitAfterCompletion" : "forever"
+                            }
+                        }
+                    },
+                    "join"       : {
+                        "commands" : {
+                            "a-set-dns-servers" : {
+                                "command" : {
+                                    "Fn::Join" : [
+                                        "",
+                                        [
+                                            "powershell.exe -Command ",
+                                            "\"",
+                                            "Get-NetAdapter | Set-DnsClientServerAddress -ServerAddresses ",
+                                            {
+                                                "Ref" : "ADServer2PrivateIp"
+                                            },
+                                            ",",
+                                            {
+                                                "Ref" : "ADServer1PrivateIp"
+                                            },
+                                            "\""
+                                        ]
+                                    ]
+                                },
+                                "waitAfterCompletion" : "30"
+                            },
+                            "b-join-domain"     : {
+                                "command" : {
+                                    "Fn::Join" : [
+                                        "",
+                                        [
+                                            "powershell.exe ",
+                                            "-Command \"",
+                                            "Add-Computer -DomainName ",
+                                            {
+                                                "Ref" : "DomainDNSName"
+                                            },
+                                            " -Credential ",
+                                            "(New-Object System.Management.Automation.PSCredential('",
+                                            {
+                                                "Ref" : "DomainNetBIOSName"
+                                            },
+                                            "\\",
+                                            {
+                                                "Ref" : "DomainAdminUser"
+                                            },
+                                            "',",
+                                            "(ConvertTo-SecureString ",
+                                            {
+                                                "Ref" : "DomainAdminPassword"
+                                            },
+                                            " -AsPlainText -Force))) ",
+                                            "-Restart\""
+                                        ]
+                                    ]
+                                },
+                                "waitAfterCompletion" : "forever"
+                            }
+                        }
+                    },
+                    "installSF"       : {
+                        "files" : {
+                            "C:\\cfn\\scripts\\AddUserToGroup.ps1" : {
+                                "content" : {
+                                    "Fn::Join" : [
+                                        "",
+                                        [
+                                            "Param(",
+                                            "\n",
+                                            "[Parameter(Mandatory=$True)]",
+                                            "\n",
+                                            "[string]$ServerName,",
+                                            "\n",
+                                            "[Parameter(Mandatory=$True)]",
+                                            "\n",
+                                            "[string]$GroupName,",
+                                            "\n",
+                                            "[Parameter(Mandatory=$True)]",
+                                            "\n",
+                                            "[string]$DomainNetBIOSName,",
+                                            "\n",
+                                            "[Parameter(Mandatory=$True)]",
+                                            "\n",
+                                            "[string]$UserName",
+                                            "\n",
+                                            ")",
+                                            "$de = [ADSI]\"WinNT://$ServerName/$GroupName,group\"",
+                                            "\n",
+                                            "$de.psbase.Invoke(\"Add\",([ADSI]\"WinNT://$DomainNetBIOSName/$UserName\").path)",
+                                            "\n"
+                                        ]
+                                    ]
+                                }
+                            },
+                            "C:\\Users\\Default\\Desktop\\InstallSF.bat" : {
+                                "content" : {
+                                    "Fn::Join" : [
+                                        "",
+                                        [
+											"powershell.exe -command Install-WindowsFeature NET-Framework-Core",
+											"\n",
+                                            "powershell.exe -command \"dir \\\\",
+                                            {
+                                                "Ref" : "ADServerNetBIOSName1"
+                                            },
+                                            "\\XDinstall\\*.iso | Mount-DiskImage\"",
+                                            "\n",
+											"\"",
+											"D:\\X64\\XenDesktop Setup\\XENDESKTOPSERVERSETUP.EXE",
+											"\" ",
+                                            "/COMPONENTS ",
+                                            "STOREFRONT ",
+                                            "/PASSIVE ",
+                                            "/NOREBOOT ",
+                                            "/CONFIGURE_FIREWALL ",
+                                            "\n"
+                                        ]
+                                    ]
+                                }
+                            }
+                        },
+                        "commands" : {
+                            "a-execute-powershell-script-AddUserToGroup" : {
+                                "command" : {
+                                    "Fn::Join" : [
+                                        "",
+                                        [
+                                            "powershell.exe ",
+                                            "-ExecutionPolicy",
+                                            " RemoteSigned",
+                                            " C:\\cfn\\scripts\\AddUserToGroup.ps1 -UserName ",
+                                            {
+                                                "Ref" : "DomainAdminUser"
+                                            },
+                                            " -ServerName ",
+                                            {
+                                                "Ref" : "SF2ServerNetBIOSName"
+                                            },
+                                            " -DomainNetBIOSName ",
+                                            {
+                                                "Ref" : "DomainNetBIOSName"
+                                            },
+                                            " -GroupName \"Administrators\"",
+                                            "\n"
+                                        ]
+                                    ]
+                                },
+                                "waitAfterCompletion" : "0"
+                            },
+                            "b-enable-autologon"                         : {
+                                "command" : {
+                                    "Fn::Join" : [
+                                        "",
+                                        [
+                                            "powershell.exe -Command ",
+                                            "\"New-ItemProperty -Path 'HKLM:\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Winlogon' -Name AutoAdminLogon -Value 1",
+                                            ";",
+                                            "New-ItemProperty -Path 'HKLM:\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Winlogon' -Name DefaultUserName -Value ",
+                                            {
+                                                "Ref" : "DomainAdminUser"
+                                            },
+                                            "@",
+                                            {
+                                                "Ref" : "DomainDNSName"
+                                            },
+                                            ";",
+                                            "New-ItemProperty -Path 'HKLM:\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Winlogon' -Name DefaultPassword -Value ",
+                                            {
+                                                "Ref" : "DomainAdminPassword"
+                                            },
+                                            "\""
+                                        ]
+                                    ]
+                                },
+                                "waitAfterCompletion" : "0"
+                            },
+                            "c-set-startup-script"                       : {
+                                "command" : {
+                                    "Fn::Join" : [
+                                        "",
+                                        [
+                                            "powershell.exe -Command ",
+                                            "\"New-ItemProperty -Path HKLM:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\RunOnce -Name InstallSF -Value C:\\Users\\Default\\Desktop\\InstallSF.bat",
+                                            "\""
+                                        ]
+                                    ]
+                                },
+                                "waitAfterCompletion" : "0"
+                            },
+                            "d-reboot"                                   : {
+                                "command" : {
+                                    "Fn::Join" : [
+                                        "",
+                                        [
+                                            "powershell.exe -Command Restart-Computer -Force"
+                                        ]
+                                    ]
+                                },
+                                "waitAfterCompletion" : "forever"
+                            },
+                            "e-cleanup-registry"                         : {
+                                "command" : {
+                                    "Fn::Join" : [
+                                        "",
+                                        [
+                                            "powershell.exe -Command ",
+                                            "\"Remove-ItemProperty -Path 'HKLM:\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Winlogon' -Name AutoAdminLogon",
+											";",
+                                            "Remove-ItemProperty -Path 'HKLM:\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Winlogon' -Name DefaultUserName",
+											";",
+                                            "Remove-ItemProperty -Path 'HKLM:\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Winlogon' -Name DefaultPassword",
+                                            "\""
+                                        ]
+                                    ]
+                                },
+                                "waitAfterCompletion" : "900"
+                            }
+                        }
+                    },
+                    "finalize"         : {
+                        "commands" : {
+                            "1-signal-success" : {
+                                "command" : {
+                                    "Fn::Join" : [
+                                        "",
+                                        [
+                                            "cfn-signal.exe -e 0 \"",
+                                            {
+                                                "Ref" : "SF2WaitHandle"
+                                            },
+                                            "\""
+                                        ]
+                                    ]
+                                }
+                            }
+                        }
+                    }
+				}
+			},
+			"Properties":{
+                "ImageId" : {
+                    "Fn::FindInMap" : [
+                        "AWSRegionArch2AMI",
+                        {
+                            "Ref" : "AWS::Region"
+                        },
+                        {
+                            "Fn::FindInMap" : [
+                                "AWSInstanceType2Arch",
+                                {
+                                    "Ref" : "SFInstanceType"
+                                },
+                                "Arch"
+                            ]
+                        }
+                    ]
+                },
+                "InstanceType" : {
+                    "Ref" : "SFInstanceType"
+                },
+                "NetworkInterfaces" : [
+                    {
+                        "DeleteOnTermination" : "true",
+                        "DeviceIndex"         : 0,
+                        "SubnetId"            : {
+                            "Ref" : "WebSubnet2Id"
+                        },
+                        "GroupSet"            : [
+                            {
+                                "Ref" : "DomainMemberSGID"
+                            },
+							{
+								"Ref" : "SFSGID"
+							}
+                        ]
+                    }
+                ],
+				"Tags":[
+					{
+						"Key":"Name",
+						"Value":{
+							"Ref":"SF2ServerNetBIOSName"
+						}
+					}	
+				],
+				"KeyName":{
+					"Ref":"KeyPairName"
+				},
+                "UserData"            : {
+                    "Fn::Base64" : {
+                        "Fn::Join" : [
+                            "",
+                            [
+                                "<script>\n",
+                                "cfn-init.exe -v -c config -s ",
+                                {
+                                    "Ref" : "AWS::StackId"
+                                },
+                                " -r SF2 ",
+                                " --region ",
+                                {
+                                    "Ref" : "AWS::Region"
+                                },
+                                "\n",
+                                "</script>"
+                            ]
+                        ]
+                    }
+                }
+				}
+		},
+		"SF1WaitCondition" : {
+			"Type" : "AWS::CloudFormation::WaitCondition",
+			"DependsOn" : "SF1",
+			"Properties" : {
+				"Handle" : {"Ref" : "SF1WaitHandle"},
+				"Timeout" : "3000"
+			}
+		},
+		"SF1WaitHandle" : {
+			"Type" : "AWS::CloudFormation::WaitConditionHandle"
+		},
+		"SF2WaitCondition" : {
+			"Type" : "AWS::CloudFormation::WaitCondition",
+			"DependsOn" : "SF2",
+			"Properties" : {
+				"Handle" : {"Ref" : "SF2WaitHandle"},
+				"Timeout" : "3000"
+			}
+		},
+		"SF2WaitHandle" : {
+			"Type" : "AWS::CloudFormation::WaitConditionHandle"
+		}
+	},
+
+	"Outputs" : {
+			"StoreFront1":{
+				"Description":"IP address of the XenDesktop 7 StoreFront Server in AZ1",
+				"Value":{
+					"Fn::GetAtt":[
+						"SF1",
+						"PrivateIp"
+					]
+				}
+			},
+			"StoreFront2":{
+				"Description":"IP address of the XenDesktop 7 StoreFront Server in AZ2",
+				"Value":{
+					"Fn::GetAtt":[
+						"SF2",
+						"PrivateIp"
+					]
+				}
+			}
+	}  
+}

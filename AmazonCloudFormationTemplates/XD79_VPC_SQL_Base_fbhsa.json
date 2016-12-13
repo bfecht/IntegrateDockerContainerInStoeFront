@@ -1,0 +1,2106 @@
+{
+    "AWSTemplateFormatVersion" : "2010-09-09",
+    "Description"              : "**Version 1.0, 08-10-2016** STEP-SQL This template deploys two Windows Server. This template is intended to be installed into an existing VPC that was built using the sample reference architecture titled: \"Implementing Active Directory Domain Services in the AWS Cloud\". This template is a reference to the official template provided by Citrix, available under https://s3.amazonaws.com/cf-XenDesktop/RA/XD76_VPC_AD_2012.json. It is customized for free tier usage on Amazon AWS and got fixed, by using the right AMI's for the server images. Customized by Bernd Fecht - bernd.fecht@hs-augsburg.de",
+    "Parameters"               : {
+        "KeyPairName"				: {
+            "Description" : "Public/private key pairs allow you to securely connect to your instance after it launches",
+            "Type"        : "String",
+            "Default"     : "XenCloud"
+        },
+        "SQL1InstanceType" : {
+            "Description" : "Amazon EC2 instance type for the 1st SQL ",
+            "Type"        : "String",
+            "Default"     : "t2.micro",
+            "AllowedValues" : [
+                "t2.micro"
+            ],
+            "ConstraintDescription" : "Only t2.micro allowed"
+        },
+        "SQL2InstanceType" : {
+            "Description" : "Amazon EC2 instance type for the 2nd SQL ",
+            "Type"        : "String",
+            "Default"     : "t2.micro",
+            "AllowedValues" : [
+                "t2.micro"
+            ],
+            "ConstraintDescription" : "Only t2.micro allowed"
+        },
+        "SQL3InstanceType" : {
+            "Description" : "Amazon EC2 instance type for the 3rd SQL ",
+            "Type"        : "String",
+            "Default"     : "t2.micro",
+            "AllowedValues" : [
+                "t2.micro"
+            ],
+            "ConstraintDescription" : "Only t2.micro allowed"
+        },
+		"DomainDNSName"				:{
+         "Description":"Fully qualified domain name (FQDN) to be used for the DHCP scop e.g. xencloud.net",
+         "Type":"String",
+         "Default":"fbhsaxencloud.net",
+         "MinLength":"3",
+         "MaxLength":"25",
+         "AllowedPattern":"[a-zA-Z0-9]+\\..+"
+      },
+		"DomainNetBIOSName"			: {
+            "Description" : "NetBIOS name for the domain (XENCLOUD)",
+            "Type"        : "String",
+            "Default"     : "XENCLOUD"
+        },
+        "SQL1NetBIOSName"		: {
+            "Description" : "NetBIOS name of the 1st SQL (up to 15 characters)",
+            "Type"        : "String",
+            "Default"     : "SQL1",
+            "MinLength"   : "1",
+            "MaxLength"   : "15",
+            "AllowedPattern" : "[a-zA-Z0-9]+"
+        },
+        "SQL2NetBIOSName"		: {
+            "Description" : "NetBIOS name of the 2nd SQL (up to 15 characters)",
+            "Type"        : "String",
+            "Default"     : "SQL2",
+            "MinLength"   : "1",
+            "MaxLength"   : "15",
+            "AllowedPattern" : "[a-zA-Z0-9]+"
+        },
+        "SQL3NetBIOSName"		: {
+            "Description" : "NetBIOS name of the 3rd SQL (up to 15 characters)",
+            "Type"        : "String",
+            "Default"     : "SQL3",
+            "MinLength"   : "1",
+            "MaxLength"   : "15",
+            "AllowedPattern" : "[a-zA-Z0-9]+"
+        },
+        "ADServerNetBIOSName1"		: {
+            "Description" : "NetBIOS name of the existing Domain Controller in AZ1",
+            "Type"        : "String",
+            "Default"     : "DC1",
+            "MinLength"   : "1",
+            "MaxLength"   : "15",
+            "AllowedPattern" : "[a-zA-Z0-9]+"
+        },
+        "ADServerNetBIOSName2"		: {
+            "Description" : "NetBIOS name of the existing Domain Controller in AZ2",
+            "Type"        : "String",
+            "Default"     : "DC2",
+            "MinLength"   : "1",
+            "MaxLength"   : "15",
+            "AllowedPattern" : "[a-zA-Z0-9]+"
+        },
+        "DomainAdminUser"			: {
+            "Description" : "User name for the account that will be added as Domain Administrator. This is separate from the default \"Administrator\" account",
+            "Type"        : "String",
+            "Default"     : "XenAdmin",
+            "MinLength"   : "5",
+            "MaxLength"   : "25",
+            "AllowedPattern" : "[a-zA-Z0-9]*"
+        },
+        "DomainAdminPassword"		: {
+            "Description" : "Password for the domain admin user. Must be at least 8 characters containing letters, numbers and symbols",
+            "Type"        : "String",
+            "MinLength"   : "8",
+            "MaxLength"   : "32",
+            "AllowedPattern" : "(?=^.{6,255}$)((?=.*\\d)(?=.*[A-Z])(?=.*[a-z])|(?=.*\\d)(?=.*[^A-Za-z0-9])(?=.*[a-z])|(?=.*[^A-Za-z0-9])(?=.*[A-Z])(?=.*[a-z])|(?=.*\\d)(?=.*[A-Z])(?=.*[^A-Za-z0-9]))^.*",
+            "NoEcho"         : "True"
+        },
+        "SQLServiceAccount"			: {
+            "Description" : "User name for the SQL Server Service Account. This Account is a Domain User.",
+            "Type"        : "String",
+            "Default"     : "sqlsa",
+            "MinLength"   : "5",
+            "MaxLength"   : "25",
+            "AllowedPattern" : "[a-zA-Z0-9]*"
+        },
+        "SQLServiceAccountPassword" : {
+            "Description" : "Password for the SQL Service account. Must be at least 8 characters containing letters, numbers and symbols",
+            "Type"        : "String",
+            "MinLength"   : "8",
+            "MaxLength"   : "32",
+            "AllowedPattern" : "(?=^.{6,255}$)((?=.*\\d)(?=.*[A-Z])(?=.*[a-z])|(?=.*\\d)(?=.*[^A-Za-z0-9])(?=.*[a-z])|(?=.*[^A-Za-z0-9])(?=.*[A-Z])(?=.*[a-z])|(?=.*\\d)(?=.*[A-Z])(?=.*[^A-Za-z0-9]))^.*",
+            "NoEcho"         : "true"
+        },
+        "ADServer1PrivateIp"        : {
+            "Description" : "Fixed private IP for the first existing Active Directory server located in AZ1",
+            "Type"        : "String",
+            "Default"     : "10.16.3.5"
+        },
+        "ADServer2PrivateIp"        : {
+            "Description" : "Fixed private IP for the second existing Active Directory serverr located in AZ2",
+            "Type"        : "String",
+            "Default"     : "10.16.4.5"
+        },
+        "SQL1PrivateIp"        : {
+            "Description" : "Primary private IP for the 1st SQL located in AZ1",
+            "Type"        : "String",
+            "Default"     : "10.16.3.100"
+        },
+        "SQL2PrivateIp"        : {
+            "Description" : "Primary private IP for the 2nd SQL located in AZ2",
+            "Type"        : "String",
+            "Default"     : "10.16.4.100"
+        },
+        "SQL3PrivateIp"        : {
+            "Description" : "Primary private IP for the 3rd SQL located in AZ2",
+            "Type"        : "String",
+            "Default"     : "10.16.4.110"
+        },
+        "DomainMemberSGID"          : {
+            "Description" : "ID of the Domain Member Security Group (e.g., sg-7f16e910)",
+            "Type"        : "String",
+            "Default"     : "sg-39d4e143"
+        },
+        "VPC"                       : {
+            "Description" : "ID of the VPC (e.g., vpc-0343606e)",
+            "Type"        : "String",
+            "Default"     : "vpc-39a19c5e"
+        },
+        "AZ1"					: {
+            "Description" : "Name of Availabilty Zone that will contain public & private subnets - Select a valid Zone for your region",
+            "Type"        : "String",
+            "Default"     : "us-east-1b",
+			"AllowedValues":[
+            "eu-central-1a",
+			"eu-central-1b",
+			"eu-west-1a",
+            "eu-west-1b",
+            "eu-west-1c",
+            "us-east-1b",
+            "us-east-1c",
+            "us-east-1d",
+            "us-east-1e",
+            "us-west-1a",
+            "us-west-1c",
+            "ap-southeast-1a",
+            "ap-southeast-1b",
+            "ap-southeast-2a",
+            "ap-southeast-2b",
+            "ap-southeast-2c",
+            "ap-northeast-1a",
+            "ap-northeast-1b",
+            "ap-northeast-1c",
+            "ap-northeast-2a",
+            "ap-northeast-2c",
+            "us-west-2a",
+            "us-west-2b",
+            "us-west-2c",
+            "sa-east-1a",
+            "sa-east-1b",
+			"sa-east-1c"
+         ],
+            "ConstraintDescription" : "Must be a valid EC2 Availabilty zone for region being deployed to."
+        },
+        "AZ2"					: {
+            "Description" : "Name of Availabilty Zone that will contain public & private subnets - Select a valid Zone for your region",
+            "Type"        : "String",
+            "Default"     : "us-east-1c",
+			"AllowedValues":[
+            "eu-central-1a",
+			"eu-central-1b",
+			"eu-west-1a",
+            "eu-west-1b",
+            "eu-west-1c",
+            "us-east-1b",
+            "us-east-1c",
+            "us-east-1d",
+            "us-east-1e",
+            "us-west-1a",
+            "us-west-1c",
+            "ap-southeast-1a",
+            "ap-southeast-1b",
+            "ap-southeast-2a",
+            "ap-southeast-2b",
+            "ap-southeast-2c",
+            "ap-northeast-1a",
+            "ap-northeast-1b",
+            "ap-northeast-1c",
+            "ap-northeast-2a",
+            "ap-northeast-2c",
+            "us-west-2a",
+            "us-west-2b",
+            "us-west-2c",
+            "sa-east-1a",
+            "sa-east-1b",
+			"sa-east-1c"
+         ],
+            "ConstraintDescription" : "Must be a valid EC2 Availabilty zone for region being deployed to. Only supports eu-west-1 ,us-east-1 & us-west-1 etc <- You can customize if you define a constraint"
+        },
+        "InfraSubnet1Id"			: {
+            "Description" : "ID of the subnet you want to provision the first SQL  into (e.g., subnet-5213a01b)",
+            "Type"        : "String",
+            "Default"     : "subnet-5213a01b"
+        },
+        "InfraSubnet2Id"			: {
+            "Description" : "ID of the subnet you want to provision the second SQL  into (e.g., subnet-caca0c91)",
+            "Type"        : "String",
+            "Default"     : "subnet-caca0c91"
+        },
+		"Infra1CIDR"				:{
+         "Description":"CIDR Block for Infrastructure Subnet 1 located in AZ1",
+         "Type":"String",
+         "Default":"10.16.3.0/24",
+         "AllowedPattern":"[a-zA-Z0-9]+\\..+"
+        },
+		"Infra2CIDR"				:{
+         "Description":"CIDR Block for Infrastructure Subnet 2 located in AZ2",
+         "Type":"String",
+         "Default":"10.16.4.0/24",
+         "AllowedPattern":"[a-zA-Z0-9]+\\..+"
+        }
+    },
+    "Mappings"                 : {
+        "AWSInstanceType2Arch" : {
+            "t2.micro"  : {
+                "Arch" : "64"
+            },
+            "t2.small"  : {
+                "Arch" : "64"
+            },
+            "t2.medium" : {
+                "Arch" : "64"
+            },
+            "t2.large" : {
+                "Arch" : "64"
+            },
+            "m4.large" : {
+                "Arch" : "64"
+            },
+            "m4.xlarge" : {
+                "Arch" : "64"
+            },
+            "m3.medium"  : {
+                "Arch" : "64"
+            },
+            "m3.large"  : {
+                "Arch" : "64"
+            },
+            "m3.xlarge"  : {
+                "Arch" : "64"
+            },
+            "c4.large"  : {
+                "Arch" : "64"
+            },
+            "c4.xlarge"  : {
+                "Arch" : "64"
+            },
+            "c4.2xlarge"  : {
+                "Arch" : "64"
+            },
+			"c3.large"  : {
+                "Arch" : "64"
+            },
+            "c3.xlarge"  : {
+                "Arch" : "64"
+            },
+            "c3.2xlarge"  : {
+                "Arch" : "64"
+            },
+			"r3.large"  : {
+                "Arch" : "64"
+            },
+            "r3.xlarge"  : {
+                "Arch" : "64"
+            }
+            
+        },
+        "AWSRegionArch2AMI": {
+            "us-east-1": {
+                "64": "ami-ee7805f9"
+            },
+            "us-west-2": {
+                "64": "ami-c06b24a0"
+            },
+            "us-west-1": {
+                "64": "ami-2827f548"
+            },
+            "eu-west-1": {
+                "64": "ami-9b81f8e8"
+            },
+            "eu-central-1": {
+                "64": "ami-7248ba1d"
+            },
+            "ap-southeast-1": {
+                "64": "ami-fffd2c9e"
+            },
+            "ap-northeast-1": {
+                "64": "ami-ee20f580"
+            },
+            "ap-northeast-2": {
+                "64": "ami-ac5389cf"
+            },
+            "ap-southeast-2": {
+                "64": "ami-899eafea"
+            },
+            "sa-east-1": {
+                "64": "ami-8e2fbfe2"
+            }
+        }
+    },
+    "Resources"                : {
+        "SQL1WaitCondition" : {
+            "Type" : "AWS::CloudFormation::WaitCondition",
+            "DependsOn" : "SQL1",
+            "Properties" : {
+                "Handle" : {
+                    "Ref" : "SQL1WaitHandle"
+                },
+                "Timeout" : "6000"
+            }
+        },
+        "SQL1WaitHandle"    : {
+            "Type" : "AWS::CloudFormation::WaitConditionHandle"
+        },
+        "SQL2WaitCondition" : {
+            "Type" : "AWS::CloudFormation::WaitCondition",
+            "DependsOn" : "SQL2",
+            "Properties" : {
+                "Handle" : {
+                    "Ref" : "SQL2WaitHandle"
+                },
+                "Timeout" : "5400"
+            }
+        },
+        "SQL2WaitHandle"    : {
+            "Type" : "AWS::CloudFormation::WaitConditionHandle"
+        },
+        "SQL3WaitCondition" : {
+            "Type" : "AWS::CloudFormation::WaitCondition",
+            "DependsOn" : "SQL2",
+            "Properties" : {
+                "Handle" : {
+                    "Ref" : "SQL3WaitHandle"
+                },
+                "Timeout" : "5400"
+            }
+        },
+        "SQL3WaitHandle"    : {
+            "Type" : "AWS::CloudFormation::WaitConditionHandle"
+        },
+        "SQL1"              : {
+            "Type" : "AWS::EC2::Instance",
+            "Metadata" : {
+                "AWS::CloudFormation::Init" : {
+                    "configSets" : {
+                        "config" : [
+                            "CFNsetup",
+                            "rename",
+                            "join",
+                            "createSqlAccount",
+                            "setup",
+                            "finalize"
+                        ]
+                    },
+                    "CFNsetup"   : {
+                        "files" : {
+                            "c:\\cfn\\cfn-hup.conf" : {
+                                "content" : {
+                                    "Fn::Join" : [
+                                        "",
+                                        [
+                                            "[main]\n",
+                                            "stack=",
+                                            {
+                                                "Ref" : "AWS::StackId"
+                                            },
+                                            "\n",
+                                            "region=",
+                                            {
+                                                "Ref" : "AWS::Region"
+                                            },
+                                            "\n"
+                                        ]
+                                    ]
+                                }
+                            },
+                            "c:\\cfn\\hooks.d\\cfn-auto-reloader.conf" : {
+                                "content" : {
+                                    "Fn::Join" : [
+                                        "",
+                                        [
+                                            "[cfn-auto-reloader-hook]\n",
+                                            "triggers=post.update\n",
+                                            "path=Resources.SQL1.Metadata.AWS::CloudFormation::Init\n",
+                                            "action=cfn-init.exe -v -s ",
+                                            {
+                                                "Ref" : "AWS::StackId"
+                                            },
+                                            " -r SQL1",
+                                            " --region ",
+                                            {
+                                                "Ref" : "AWS::Region"
+                                            },
+                                            "\n"
+                                        ]
+                                    ]
+                                }
+                            }
+                        },
+                        "services" : {
+                            "windows" : {
+                                "cfn-hup" : {
+                                    "enabled" : "true",
+                                    "ensureRunning" : "true",
+                                    "files"         : [
+                                        "c:\\cfn\\cfn-hup.conf",
+                                        "c:\\cfn\\hooks.d\\cfn-auto-reloader.conf"
+                                    ]
+                                }
+                            }
+                        },
+						"commands" : {
+                            "a-set-execution-policy" : {
+                                "command" : {
+                                    "Fn::Join" : [
+                                        "",
+                                        [
+                                            "powershell.exe -command Set-ExecutionPolicy RemoteSigned -Force"
+                                        ]
+                                    ]
+                                },
+                                "waitAfterCompletion" : "0"
+                            }
+                        }
+                    },
+                    "rename"     : {
+                        "commands" : {
+                            "1-execute-powershell-script-RenameComputer" : {
+                                "command" : {
+                                    "Fn::Join" : [
+                                        "",
+                                        [
+                                            "powershell.exe -Command Rename-Computer -NewName ",
+                                            {
+                                                "Ref" : "SQL1NetBIOSName"
+                                            },
+                                            " -Restart"
+                                        ]
+                                    ]
+                                },
+                                "waitAfterCompletion" : "forever"
+                            }
+                        }
+                    },
+                    "join"       : {
+                        "commands" : {
+                            "a-set-dns-servers" : {
+                                "command" : {
+                                    "Fn::Join" : [
+                                        "",
+                                        [
+                                            "powershell.exe -Command ",
+                                            "\"",
+                                            "Get-NetAdapter | Set-DnsClientServerAddress -ServerAddresses ",
+                                            {
+                                                "Ref" : "ADServer1PrivateIp"
+                                            },
+                                            ",",
+                                            {
+                                                "Ref" : "ADServer2PrivateIp"
+                                            },
+                                            "\""
+                                        ]
+                                    ]
+                                },
+                                "waitAfterCompletion" : "30"
+                            },
+                            "b-join-domain"     : {
+                                "command" : {
+                                    "Fn::Join" : [
+                                        "",
+                                        [
+                                            "powershell.exe ",
+                                            "-Command \"",
+                                            "Add-Computer -DomainName ",
+                                            {
+                                                "Ref" : "DomainDNSName"
+                                            },
+                                            " -Credential ",
+                                            "(New-Object System.Management.Automation.PSCredential('",
+                                            {
+                                                "Ref" : "DomainNetBIOSName"
+                                            },
+                                            "\\",
+                                            {
+                                                "Ref" : "DomainAdminUser"
+                                            },
+                                            "',",
+                                            "(ConvertTo-SecureString ",
+                                            {
+                                                "Ref" : "DomainAdminPassword"
+                                            },
+                                            " -AsPlainText -Force))) ",
+                                            "-Restart\""
+                                        ]
+                                    ]
+                                },
+                                "waitAfterCompletion" : "forever"
+                            }
+                        }
+                    },
+                    "createSqlAccount" : {
+                        "commands" : {
+                            "1-create-sqlacct" : {
+                                "command" : {
+                                    "Fn::Join" : [
+                                        "",
+                                        [
+                                            "powershell.exe -Command ",
+                                            "\"Invoke-Command -Scriptblock{ New-ADUser ",
+                                            "-Name ",
+                                            {
+                                                "Ref" : "SQLServiceAccount"
+                                            },
+                                            " ",
+                                            "-UserPrincipalName ",
+                                            {
+                                                "Ref" : "SQLServiceAccount"
+                                            },
+                                            "@",
+                                            {
+                                                "Ref" : "DomainDNSName"
+                                            },
+                                            " ",
+                                            "-AccountPassword (ConvertTo-SecureString ",
+                                            {
+                                                "Ref" : "SQLServiceAccountPassword"
+                                            },
+                                            " -AsPlainText -Force) ",
+                                            "-Enabled $true ",
+                                            "-PasswordNeverExpires $true -EA 0} -ComputerName ",
+                                            {
+                                                "Ref" : "ADServerNetBIOSName1"
+                                            },
+                                            " -Credential ",
+                                            "(New-Object System.Management.Automation.PSCredential('",
+                                            {
+                                                "Ref" : "DomainNetBIOSName"
+                                            },
+                                            "\\",
+                                            {
+                                                "Ref" : "DomainAdminUser"
+                                            },
+                                            "',",
+                                            "(ConvertTo-SecureString ",
+                                            {
+                                                "Ref" : "DomainAdminPassword"
+                                            },
+                                            " -AsPlainText -Force))) ",
+                                            "\""
+                                        ]
+                                    ]
+                                },
+                                "waitAfterCompletion" : "0"
+                            }
+                        }
+                    },
+                    "setup"       : {
+                        "files" : {                            
+                            "c:\\cfn\\scripts\\OpenSQLPorts.bat"  : {
+                                "source" : "https://s3.amazonaws.com/microsoft_windows/scripts/OpenSQLPorts.bat"
+                            },
+                            "C:\\cfn\\scripts\\AddUserToGroup.ps1" : {
+                                "content" : {
+                                    "Fn::Join" : [
+                                        "",
+                                        [
+                                            "Param(",
+                                            "\n",
+                                            "[Parameter(Mandatory=$True)]",
+                                            "\n",
+                                            "[string]$ServerName,",
+                                            "\n",
+                                            "[Parameter(Mandatory=$True)]",
+                                            "\n",
+                                            "[string]$GroupName,",
+                                            "\n",
+                                            "[Parameter(Mandatory=$True)]",
+                                            "\n",
+                                            "[string]$DomainNetBIOSName,",
+                                            "\n",
+                                            "[Parameter(Mandatory=$True)]",
+                                            "\n",
+                                            "[string]$UserName",
+                                            "\n",
+                                            ")",
+                                            "$de = [ADSI]\"WinNT://$ServerName/$GroupName,group\"",
+                                            "\n",
+                                            "$de.psbase.Invoke(\"Add\",([ADSI]\"WinNT://$DomainNetBIOSName/$UserName\").path)",
+                                            "\n"
+                                        ]
+                                    ]
+                                }
+                            },
+                            "c:\\cfn\\scripts\\MaxDOP.sql"    : {
+                                "source" : "https://s3.amazonaws.com/microsoft_windows/scripts/MaxDOP.sql"
+                            }
+                        },
+                        "commands" : {
+                            "a-create-folder"                  : {
+                                "command" : {
+                                    "Fn::Join" : [
+                                        "",
+                                        [
+                                            "powershell.exe -Command ",
+                                            "\"",
+                                            "Invoke-Command -ScriptBlock {New-Item -ItemType directory -Path c:\\ -Name sqlinstall} -ComputerName ",
+                                            {
+                                                "Ref" : "ADServerNetBIOSName1"
+                                            },
+                                            " -Credential ",
+                                            "(New-Object System.Management.Automation.PSCredential('",
+                                            {
+                                                "Ref" : "DomainNetBIOSName"
+                                            },
+                                            "\\",
+                                            {
+                                                "Ref" : "DomainAdminUser"
+                                            },
+                                            "',",
+                                            "(ConvertTo-SecureString ",
+                                            {
+                                                "Ref" : "DomainAdminPassword"
+                                            },
+                                            " -AsPlainText -Force))) ",
+                                            "\""
+                                        ]
+                                    ]
+                                },
+                                "waitAfterCompletion" : "0"
+                            },
+                            "b-create-share"                   : {
+                                "command" : {
+                                    "Fn::Join" : [
+                                        "",
+                                        [
+                                            "powershell.exe -Command ",
+                                            "\"",
+                                            "Invoke-Command -ScriptBlock { New-SmbShare -Name sqlinstall -Path c:\\sqlinstall -FullAccess everyone } -ComputerName ",
+                                            {
+                                                "Ref" : "ADServerNetBIOSName1"
+                                            },
+                                            " -Credential ",
+                                            "(New-Object System.Management.Automation.PSCredential('",
+                                            {
+                                                "Ref" : "DomainNetBIOSName"
+                                            },
+                                            "\\",
+                                            {
+                                                "Ref" : "DomainAdminUser"
+                                            },
+                                            "',",
+                                            "(ConvertTo-SecureString ",
+                                            {
+                                                "Ref" : "DomainAdminPassword"
+                                            },
+                                            " -AsPlainText -Force))) ",
+                                            "\""
+                                        ]
+                                    ]
+                                },
+                                "waitAfterCompletion" : "0"
+                            },
+                            "c-open-SQL-ports"                  : {
+                                "command" : "C:\\cfn\\scripts\\OpenSQLPorts.bat"
+                            },
+                            "d-execute-powershell-script-AddUserToGroup" : {
+                                "command" : {
+                                    "Fn::Join" : [
+                                        "",
+                                        [
+                                            "powershell.exe ",
+                                            "-ExecutionPolicy",
+                                            " RemoteSigned",
+                                            " C:\\cfn\\scripts\\AddUserToGroup.ps1 -UserName ",
+                                            {
+                                                "Ref" : "DomainAdminUser"
+                                            },
+                                            " -ServerName ",
+                                            {
+                                                "Ref" : "SQL1NetBIOSName"
+                                            },
+                                            " -DomainNetBIOSName ",
+                                            {
+                                                "Ref" : "DomainNetBIOSName"
+                                            },
+                                            " -GroupName \"Administrators\"",
+                                            "\n"
+                                        ]
+                                    ]
+                                },
+                                "waitAfterCompletion" : "0"
+                            },
+                            "e-execute-powershell-script-AddUserToGroup" : {
+                                "command" : {
+                                    "Fn::Join" : [
+                                        "",
+                                        [
+                                            "powershell.exe ",
+                                            "-ExecutionPolicy",
+                                            " RemoteSigned",
+                                            " C:\\cfn\\scripts\\AddUserToGroup.ps1 -UserName ",
+                                            {
+                                                "Ref" : "SQLServiceAccount"
+                                            },
+                                            " -ServerName ",
+                                            {
+                                                "Ref" : "SQL1NetBIOSName"
+                                            },
+                                            " -DomainNetBIOSName ",
+                                            {
+                                                "Ref" : "DomainNetBIOSName"
+                                            },
+                                            " -GroupName \"Administrators\"",
+                                            "\n"
+                                        ]
+                                    ]
+                                },
+                                "waitAfterCompletion" : "0"
+                            },
+                            "f-enable-autologon"                         : {
+                                "command" : {
+                                    "Fn::Join" : [
+                                        "",
+                                        [
+                                            "powershell.exe -Command ",
+                                            "\"New-ItemProperty -Path 'HKLM:\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Winlogon' -Name AutoAdminLogon -Value 1",
+                                            ";",
+                                            "New-ItemProperty -Path 'HKLM:\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Winlogon' -Name DefaultUserName -Value ",
+                                            {
+                                                "Ref" : "DomainAdminUser"
+                                            },
+                                            "@",
+                                            {
+                                                "Ref" : "DomainDNSName"
+                                            },
+                                            " | out-null",
+                                            ";",
+                                            "New-ItemProperty -Path 'HKLM:\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Winlogon' -Name DefaultPassword -Value ",
+                                            {
+                                                "Ref" : "DomainAdminPassword"
+                                            },
+                                            "\""
+                                        ]
+                                    ]
+                                },
+                                "waitAfterCompletion" : "0"
+                            },
+                            "g-reboot"                                   : {
+                                "command" : {
+                                    "Fn::Join" : [
+                                        "",
+                                        [
+                                            "powershell.exe -Command Restart-Computer -Force"
+                                        ]
+                                    ]
+                                },
+                                "waitAfterCompletion" : "forever"
+                            },
+                            "h-force-ad-replication"                     : {
+                                "command" : {
+                                    "Fn::Join" : [
+                                        "",
+                                        [
+                                            "powershell.exe -Command ",
+                                            "\"Invoke-Command -Scriptblock{ repadmin /syncall /A /e /P } -ComputerName ",
+                                            {
+                                                "Ref" : "ADServerNetBIOSName1"
+                                            },
+                                            " -Credential ",
+                                            "(New-Object System.Management.Automation.PSCredential('",
+                                            {
+                                                "Ref" : "DomainNetBIOSName"
+                                            },
+                                            "\\",
+                                            {
+                                                "Ref" : "DomainAdminUser"
+                                            },
+                                            "',",
+                                            "(ConvertTo-SecureString ",
+                                            {
+                                                "Ref" : "DomainAdminPassword"
+                                            },
+                                            " -AsPlainText -Force))) ",
+                                            "\""
+                                        ]
+                                    ]
+                                },
+                                "waitAfterCompletion" : "0"
+                            },
+                            "i-cleanup-registry"                         : {
+                                "command" : {
+                                    "Fn::Join" : [
+                                        "",
+                                        [
+                                            "powershell.exe -Command ",
+                                            "\"Remove-ItemProperty -Path 'HKLM:\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Winlogon' -Name AutoAdminLogon",
+                                            ";",
+                                            "Remove-ItemProperty -Path 'HKLM:\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Winlogon' -Name DefaultUserName",
+                                            ";",
+                                            "Remove-ItemProperty -Path 'HKLM:\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Winlogon' -Name DefaultPassword",
+                                            "\""
+                                        ]
+                                    ]
+                                },
+                                "waitAfterCompletion" : "900"
+                            }
+                        }
+                    },
+                    "finalize"         : {
+                        "commands" : {
+                            "1-signal-success" : {
+                                "command" : {
+                                    "Fn::Join" : [
+                                        "",
+                                        [
+                                            "cfn-signal.exe -e 0 \"",
+                                            {
+                                                "Ref" : "SQL1WaitHandle"
+                                            },
+                                            "\""
+                                        ]
+                                    ]
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "Properties" : {
+                "ImageId" : {
+                    "Fn::FindInMap" : [
+                        "AWSRegionArch2AMI",
+                        {
+                            "Ref" : "AWS::Region"
+                        },
+                        {
+                            "Fn::FindInMap" : [
+                                "AWSInstanceType2Arch",
+                                {
+                                    "Ref" : "SQL1InstanceType"
+                                },
+                                "Arch"
+                            ]
+                        }
+                    ]
+                },
+                "InstanceType" : {
+                    "Ref" : "SQL1InstanceType"
+                },
+                "EbsOptimized" : "false",
+                "NetworkInterfaces" : [
+                    {
+                        "DeleteOnTermination" : "true",
+                        "DeviceIndex"         : 0,
+                        "SubnetId"            : {
+                            "Ref" : "InfraSubnet1Id"
+                        },
+                        "PrivateIpAddresses"  : [
+                            {
+                                "Primary" : "true",
+                                "PrivateIpAddress" : {
+                                    "Ref" : "SQL1PrivateIp"
+                                }
+                            }
+                        ],
+                        "GroupSet"            : [
+                            {
+                                "Ref" : "DomainMemberSGID"
+                            },
+                            {
+                                "Ref" : "SQLSecurityGroup"
+                            },
+                            {
+                                "Ref" : "SQLClientSecurityGroup"
+                            }
+                        ]
+                    }
+                ],
+                "Tags"              : [
+                    {
+                        "Key" : "Name",
+                        "Value" : {
+                            "Ref" : "SQL1NetBIOSName"
+                        }
+                    }
+                ],
+                "BlockDeviceMappings" : [
+                    {
+                        "DeviceName" : "/dev/sda1",
+                        "Ebs"        : {
+                            "VolumeSize" : "50",
+                            "VolumeType" : "gp2"
+                        }
+                    }
+                ],
+                "KeyName"             : {
+                    "Ref" : "KeyPairName"
+                },
+                "UserData"            : {
+                    "Fn::Base64" : {
+                        "Fn::Join" : [
+                            "",
+                            [
+                                "<script>\n",
+                                "cfn-init.exe -v -c config -s ",
+                                {
+                                    "Ref" : "AWS::StackId"
+                                },
+                                " -r SQL1 ",
+                                " --region ",
+                                {
+                                    "Ref" : "AWS::Region"
+                                },
+                                "\n",
+                                "</script>"
+                            ]
+                        ]
+                    }
+                }
+            }
+        },
+        "SQL2"              : {
+            "Type" : "AWS::EC2::Instance",
+            "DependsOn" : "SQL1WaitCondition",
+            "Metadata"  : {
+                "AWS::CloudFormation::Init" : {
+                    "configSets" : {
+                        "config" : [
+                            "CFNsetup",
+                            "rename",
+                            "join",
+                            "setup",
+                            "configsql",
+                            "finalize"
+                        ]
+                    },
+                    "CFNsetup"   : {
+                        "files" : {
+                            "c:\\cfn\\cfn-hup.conf" : {
+                                "content" : {
+                                    "Fn::Join" : [
+                                        "",
+                                        [
+                                            "[main]\n",
+                                            "stack=",
+                                            {
+                                                "Ref" : "AWS::StackId"
+                                            },
+                                            "\n",
+                                            "region=",
+                                            {
+                                                "Ref" : "AWS::Region"
+                                            },
+                                            "\n"
+                                        ]
+                                    ]
+                                }
+                            },
+                            "c:\\cfn\\hooks.d\\cfn-auto-reloader.conf" : {
+                                "content" : {
+                                    "Fn::Join" : [
+                                        "",
+                                        [
+                                            "[cfn-auto-reloader-hook]\n",
+                                            "triggers=post.update\n",
+                                            "path=Resources.SQL2.Metadata.AWS::CloudFormation::Init\n",
+                                            "action=cfn-init.exe -v -s ",
+                                            {
+                                                "Ref" : "AWS::StackId"
+                                            },
+                                            " -r SQL2",
+                                            " --region ",
+                                            {
+                                                "Ref" : "AWS::Region"
+                                            },
+                                            "\n"
+                                        ]
+                                    ]
+                                }
+                            },
+                            "c:\\cfn\\scripts\\MaxDOP.sql"    : {
+                                "source" : "https://s3.amazonaws.com/microsoft_windows/scripts/MaxDOP.sql"
+                            }
+                        },
+                        "services" : {
+                            "windows" : {
+                                "cfn-hup" : {
+                                    "enabled" : "true",
+                                    "ensureRunning" : "true",
+                                    "files"         : [
+                                        "c:\\cfn\\cfn-hup.conf",
+                                        "c:\\cfn\\hooks.d\\cfn-auto-reloader.conf"
+                                    ]
+                                }
+                            }
+                        },
+						"commands" : {
+                            "a-set-execution-policy" : {
+                                "command" : {
+                                    "Fn::Join" : [
+                                        "",
+                                        [
+                                            "powershell.exe -command Set-ExecutionPolicy RemoteSigned -Force"
+                                        ]
+                                    ]
+                                },
+                                "waitAfterCompletion" : "0"
+                            }
+                        }
+                    },
+                    "rename"     : {
+                        "commands" : {
+                            "1-execute-powershell-script-RenameComputer" : {
+                                "command" : {
+                                    "Fn::Join" : [
+                                        "",
+                                        [
+                                            "powershell.exe -Command Rename-Computer -NewName ",
+                                            {
+                                                "Ref" : "SQL2NetBIOSName"
+                                            },
+                                            " -Restart"
+                                        ]
+                                    ]
+                                },
+                                "waitAfterCompletion" : "forever"
+                            }
+                        }
+                    },
+                    "join"       : {
+                        "commands" : {
+                            "a-set-dns-servers" : {
+                                "command" : {
+                                    "Fn::Join" : [
+                                        "",
+                                        [
+                                            "powershell.exe -Command ",
+                                            "\"",
+                                            "Get-NetAdapter | Set-DnsClientServerAddress -ServerAddresses ",
+                                            {
+                                                "Ref" : "ADServer2PrivateIp"
+                                            },
+                                            ",",
+                                            {
+                                                "Ref" : "ADServer1PrivateIp"
+                                            },
+                                            "\""
+                                        ]
+                                    ]
+                                },
+                                "waitAfterCompletion" : "30"
+                            },
+                            "b-join-domain"     : {
+                                "command" : {
+                                    "Fn::Join" : [
+                                        "",
+                                        [
+                                            "powershell.exe ",
+                                            "-Command \"",
+                                            "Add-Computer -DomainName ",
+                                            {
+                                                "Ref" : "DomainDNSName"
+                                            },
+                                            " -Credential ",
+                                            "(New-Object System.Management.Automation.PSCredential('",
+                                            {
+                                                "Ref" : "DomainNetBIOSName"
+                                            },
+                                            "\\",
+                                            {
+                                                "Ref" : "DomainAdminUser"
+                                            },
+                                            "',",
+                                            "(ConvertTo-SecureString ",
+                                            {
+                                                "Ref" : "DomainAdminPassword"
+                                            },
+                                            " -AsPlainText -Force))) ",
+                                            "-Restart\""
+                                        ]
+                                    ]
+                                },
+                                "waitAfterCompletion" : "forever"
+                            }
+                        }
+                    },
+                    "setup" : {
+                        "files" : {
+                            "c:\\cfn\\scripts\\OpenSQLPorts.bat" : {
+                                "source" : "https://s3.amazonaws.com/microsoft_windows/scripts/OpenSQLPorts.bat"
+                            },
+                            "C:\\cfn\\scripts\\AddUserToGroup.ps1" : {
+                                "content" : {
+                                    "Fn::Join" : [
+                                        "",
+                                        [
+                                            "Param(",
+                                            "\n",
+                                            "[Parameter(Mandatory=$True)]",
+                                            "\n",
+                                            "[string]$ServerName,",
+                                            "\n",
+                                            "[Parameter(Mandatory=$True)]",
+                                            "\n",
+                                            "[string]$GroupName,",
+                                            "\n",
+                                            "[Parameter(Mandatory=$True)]",
+                                            "\n",
+                                            "[string]$DomainNetBIOSName,",
+                                            "\n",
+                                            "[Parameter(Mandatory=$True)]",
+                                            "\n",
+                                            "[string]$UserName",
+                                            "\n",
+                                            ")",
+                                            "$de = [ADSI]\"WinNT://$ServerName/$GroupName,group\"",
+                                            "\n",
+                                            "$de.psbase.Invoke(\"Add\",([ADSI]\"WinNT://$DomainNetBIOSName/$UserName\").path)",
+                                            "\n"
+                                        ]
+                                    ]
+                                }
+                            }                            
+                        },
+                        "commands" : {
+                            "a-open-SQL-ports"                : {
+                                "command" : "C:\\cfn\\scripts\\OpenSQLPorts.bat"
+                            },
+                            "b-execute-powershell-script-AddUserToGroup" : {
+                                "command" : {
+                                    "Fn::Join" : [
+                                        "",
+                                        [
+                                            "powershell.exe ",
+                                            "-ExecutionPolicy",
+                                            " RemoteSigned",
+                                            " C:\\cfn\\scripts\\AddUserToGroup.ps1 -UserName ",
+                                            {
+                                                "Ref" : "SQLServiceAccount"
+                                            },
+                                            " -ServerName ",
+                                            {
+                                                "Ref" : "SQL2NetBIOSName"
+                                            },
+                                            " -DomainNetBIOSName ",
+                                            {
+                                                "Ref" : "DomainNetBIOSName"
+                                            },
+                                            " -GroupName \"Administrators\"",
+                                            "\n"
+                                        ]
+                                    ]
+                                },
+                                "waitAfterCompletion" : "0"
+                            },
+                            "c-enable-autologon"                         : {
+                                "command" : {
+                                    "Fn::Join" : [
+                                        "",
+                                        [
+                                            "powershell.exe -Command ",
+                                            "\"New-ItemProperty -Path 'HKLM:\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Winlogon' -Name AutoAdminLogon -Value 1",
+                                            ";",
+                                            "New-ItemProperty -Path 'HKLM:\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Winlogon' -Name DefaultUserName -Value ",
+                                            {
+                                                "Ref" : "DomainAdminUser"
+                                            },
+                                            "@",
+                                            {
+                                                "Ref" : "DomainDNSName"
+                                            },
+                                            ";",
+                                            "New-ItemProperty -Path 'HKLM:\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Winlogon' -Name DefaultPassword -Value ",
+                                            {
+                                                "Ref" : "DomainAdminPassword"
+                                            },
+                                            "\""
+                                        ]
+                                    ]
+                                },
+                                "waitAfterCompletion" : "0"
+                            },
+                            "d-reboot"                                   : {
+                                "command" : {
+                                    "Fn::Join" : [
+                                        "",
+                                        [
+                                            "powershell.exe -Command Restart-Computer -Force"
+                                        ]
+                                    ]
+                                },
+                                "waitAfterCompletion" : "forever"
+                            }
+                        }
+                    },
+                    "configsql"  : {
+                        "files" : {
+                            "c:\\cfn\\scripts\\MaxDOP.sql"    : {
+                                "source" : "https://s3.amazonaws.com/microsoft_windows/scripts/MaxDOP.sql"
+                            }
+                        },
+                        "commands" : {
+                            "a-reboot"             : {
+                                "command" : {
+                                    "Fn::Join" : [
+                                        "",
+                                        [
+                                            "powershell.exe -Command Restart-Computer -Force"
+                                        ]
+                                    ]
+                                },
+                                "waitAfterCompletion" : "forever"
+                            }
+                        }
+                    },
+                    "finalize"   : {
+                        "commands" : {
+                            "a-cleanup-registry" : {
+                                "command" : {
+                                    "Fn::Join" : [
+                                        "",
+                                        [
+                                            "powershell.exe -Command ",
+                                            "\"Remove-ItemProperty -Path 'HKLM:\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Winlogon' -Name AutoAdminLogon",
+                                            ";",
+                                            "Remove-ItemProperty -Path 'HKLM:\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Winlogon' -Name DefaultUserName",
+                                            ";",
+                                            "Remove-ItemProperty -Path 'HKLM:\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Winlogon' -Name DefaultPassword",
+                                            "\""
+                                        ]
+                                    ]
+                                },
+                                "waitAfterCompletion" : "0"
+                            },
+                            "b-signal-success"   : {
+                                "command" : {
+                                    "Fn::Join" : [
+                                        "",
+                                        [
+                                            "cfn-signal.exe -e 0 \"",
+                                            {
+                                                "Ref" : "SQL2WaitHandle"
+                                            },
+                                            "\""
+                                        ]
+                                    ]
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "Properties" : {
+                "ImageId" : {
+                    "Fn::FindInMap" : [
+                        "AWSRegionArch2AMI",
+                        {
+                            "Ref" : "AWS::Region"
+                        },
+                        {
+                            "Fn::FindInMap" : [
+                                "AWSInstanceType2Arch",
+                                {
+                                    "Ref" : "SQL2InstanceType"
+                                },
+                                "Arch"
+                            ]
+                        }
+                    ]
+                },
+                "InstanceType" : {
+                    "Ref" : "SQL2InstanceType"
+                },
+                "EbsOptimized" : "false",
+                "NetworkInterfaces" : [
+                    {
+                        "DeleteOnTermination" : "true",
+                        "DeviceIndex"         : 0,
+                        "SubnetId"            : {
+                            "Ref" : "InfraSubnet2Id"
+                        },
+                        "PrivateIpAddresses"  : [
+                            {
+                                "Primary" : "true",
+                                "PrivateIpAddress" : {
+                                    "Ref" : "SQL2PrivateIp"
+                                }
+                            }
+                        ],
+                        "GroupSet"            : [
+                            {
+                                "Ref" : "DomainMemberSGID"
+                            },
+                            {
+                                "Ref" : "SQLSecurityGroup"
+                            },
+                            {
+                                "Ref" : "SQLClientSecurityGroup"
+                            }
+                        ]
+                    }
+                ],
+                "Tags"              : [
+                    {
+                        "Key" : "Name",
+                        "Value" : {
+                            "Ref" : "SQL2NetBIOSName"
+                        }
+                    }
+                ],
+                "BlockDeviceMappings" : [
+                    {
+                        "DeviceName" : "/dev/sda1",
+                        "Ebs"        : {
+                            "VolumeSize" : "50",
+                            "VolumeType" : "gp2"
+                        }
+                    }
+                ],                
+                "KeyName"             : {
+                    "Ref" : "KeyPairName"
+                },
+                "UserData"            : {
+                    "Fn::Base64" : {
+                        "Fn::Join" : [
+                            "",
+                            [
+                                "<script>\n",
+                                "cfn-init.exe -v -c config -s ",
+                                {
+                                    "Ref" : "AWS::StackId"
+                                },
+                                " -r SQL2 ",
+                                " --region ",
+                                {
+                                    "Ref" : "AWS::Region"
+                                },
+                                "\n",
+                                "</script>"
+                            ]
+                        ]
+                    }
+                }
+            }
+        },  
+        "SQL3"              : {
+            "Type" : "AWS::EC2::Instance",
+            "DependsOn" : "SQL1WaitCondition",
+            "Metadata"  : {
+                "AWS::CloudFormation::Init" : {
+                    "configSets" : {
+                        "config" : [
+                            "CFNsetup",
+                            "rename",
+                            "join",
+                            "setup",
+                            "configsql",
+                            "finalize"
+                        ]
+                    },
+                    "CFNsetup"   : {
+                        "files" : {
+                            "c:\\cfn\\cfn-hup.conf" : {
+                                "content" : {
+                                    "Fn::Join" : [
+                                        "",
+                                        [
+                                            "[main]\n",
+                                            "stack=",
+                                            {
+                                                "Ref" : "AWS::StackId"
+                                            },
+                                            "\n",
+                                            "region=",
+                                            {
+                                                "Ref" : "AWS::Region"
+                                            },
+                                            "\n"
+                                        ]
+                                    ]
+                                }
+                            },
+                            "c:\\cfn\\hooks.d\\cfn-auto-reloader.conf" : {
+                                "content" : {
+                                    "Fn::Join" : [
+                                        "",
+                                        [
+                                            "[cfn-auto-reloader-hook]\n",
+                                            "triggers=post.update\n",
+                                            "path=Resources.SQL3.Metadata.AWS::CloudFormation::Init\n",
+                                            "action=cfn-init.exe -v -s ",
+                                            {
+                                                "Ref" : "AWS::StackId"
+                                            },
+                                            " -r SQL3",
+                                            " --region ",
+                                            {
+                                                "Ref" : "AWS::Region"
+                                            },
+                                            "\n"
+                                        ]
+                                    ]
+                                }
+                            },
+                            "c:\\cfn\\scripts\\MaxDOP.sql"    : {
+                                "source" : "https://s3.amazonaws.com/microsoft_windows/scripts/MaxDOP.sql"
+                            }
+                        },
+                        "services" : {
+                            "windows" : {
+                                "cfn-hup" : {
+                                    "enabled" : "true",
+                                    "ensureRunning" : "true",
+                                    "files"         : [
+                                        "c:\\cfn\\cfn-hup.conf",
+                                        "c:\\cfn\\hooks.d\\cfn-auto-reloader.conf"
+                                    ]
+                                }
+                            }
+                        },
+						"commands" : {
+                            "a-set-execution-policy" : {
+                                "command" : {
+                                    "Fn::Join" : [
+                                        "",
+                                        [
+                                            "powershell.exe -command Set-ExecutionPolicy RemoteSigned -Force"
+                                        ]
+                                    ]
+                                },
+                                "waitAfterCompletion" : "0"
+                            }
+                        }
+                    },
+                    "rename"     : {
+                        "commands" : {
+                            "1-execute-powershell-script-RenameComputer" : {
+                                "command" : {
+                                    "Fn::Join" : [
+                                        "",
+                                        [
+                                            "powershell.exe -Command Rename-Computer -NewName ",
+                                            {
+                                                "Ref" : "SQL3NetBIOSName"
+                                            },
+                                            " -Restart"
+                                        ]
+                                    ]
+                                },
+                                "waitAfterCompletion" : "forever"
+                            }
+                        }
+                    },
+                    "join"       : {
+                        "commands" : {
+                            "a-set-dns-servers" : {
+                                "command" : {
+                                    "Fn::Join" : [
+                                        "",
+                                        [
+                                            "powershell.exe -Command ",
+                                            "\"",
+                                            "Get-NetAdapter | Set-DnsClientServerAddress -ServerAddresses ",
+                                            {
+                                                "Ref" : "ADServer2PrivateIp"
+                                            },
+                                            ",",
+                                            {
+                                                "Ref" : "ADServer1PrivateIp"
+                                            },
+                                            "\""
+                                        ]
+                                    ]
+                                },
+                                "waitAfterCompletion" : "30"
+                            },
+                            "b-join-domain"     : {
+                                "command" : {
+                                    "Fn::Join" : [
+                                        "",
+                                        [
+                                            "powershell.exe ",
+                                            "-Command \"",
+                                            "Add-Computer -DomainName ",
+                                            {
+                                                "Ref" : "DomainDNSName"
+                                            },
+                                            " -Credential ",
+                                            "(New-Object System.Management.Automation.PSCredential('",
+                                            {
+                                                "Ref" : "DomainNetBIOSName"
+                                            },
+                                            "\\",
+                                            {
+                                                "Ref" : "DomainAdminUser"
+                                            },
+                                            "',",
+                                            "(ConvertTo-SecureString ",
+                                            {
+                                                "Ref" : "DomainAdminPassword"
+                                            },
+                                            " -AsPlainText -Force))) ",
+                                            "-Restart\""
+                                        ]
+                                    ]
+                                },
+                                "waitAfterCompletion" : "forever"
+                            }
+                        }
+                    },
+                    "setup" : {
+                        "files" : {
+                            "c:\\cfn\\scripts\\OpenSQLPorts.bat" : {
+                                "source" : "https://s3.amazonaws.com/microsoft_windows/scripts/OpenSQLPorts.bat"
+                            },
+                            "C:\\cfn\\scripts\\AddUserToGroup.ps1" : {
+                                "content" : {
+                                    "Fn::Join" : [
+                                        "",
+                                        [
+                                            "Param(",
+                                            "\n",
+                                            "[Parameter(Mandatory=$True)]",
+                                            "\n",
+                                            "[string]$ServerName,",
+                                            "\n",
+                                            "[Parameter(Mandatory=$True)]",
+                                            "\n",
+                                            "[string]$GroupName,",
+                                            "\n",
+                                            "[Parameter(Mandatory=$True)]",
+                                            "\n",
+                                            "[string]$DomainNetBIOSName,",
+                                            "\n",
+                                            "[Parameter(Mandatory=$True)]",
+                                            "\n",
+                                            "[string]$UserName",
+                                            "\n",
+                                            ")",
+                                            "$de = [ADSI]\"WinNT://$ServerName/$GroupName,group\"",
+                                            "\n",
+                                            "$de.psbase.Invoke(\"Add\",([ADSI]\"WinNT://$DomainNetBIOSName/$UserName\").path)",
+                                            "\n"
+                                        ]
+                                    ]
+                                }
+                            }                            
+                        },
+                        "commands" : {
+                            "a-open-SQL-ports"                : {
+                                "command" : "C:\\cfn\\scripts\\OpenSQLPorts.bat"
+                            },
+                            "b-execute-powershell-script-AddUserToGroup" : {
+                                "command" : {
+                                    "Fn::Join" : [
+                                        "",
+                                        [
+                                            "powershell.exe ",
+                                            "-ExecutionPolicy",
+                                            " RemoteSigned",
+                                            " C:\\cfn\\scripts\\AddUserToGroup.ps1 -UserName ",
+                                            {
+                                                "Ref" : "SQLServiceAccount"
+                                            },
+                                            " -ServerName ",
+                                            {
+                                                "Ref" : "SQL3NetBIOSName"
+                                            },
+                                            " -DomainNetBIOSName ",
+                                            {
+                                                "Ref" : "DomainNetBIOSName"
+                                            },
+                                            " -GroupName \"Administrators\"",
+                                            "\n"
+                                        ]
+                                    ]
+                                },
+                                "waitAfterCompletion" : "0"
+                            },
+                            "c-enable-autologon"                         : {
+                                "command" : {
+                                    "Fn::Join" : [
+                                        "",
+                                        [
+                                            "powershell.exe -Command ",
+                                            "\"New-ItemProperty -Path 'HKLM:\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Winlogon' -Name AutoAdminLogon -Value 1",
+                                            ";",
+                                            "New-ItemProperty -Path 'HKLM:\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Winlogon' -Name DefaultUserName -Value ",
+                                            {
+                                                "Ref" : "DomainAdminUser"
+                                            },
+                                            "@",
+                                            {
+                                                "Ref" : "DomainDNSName"
+                                            },
+                                            ";",
+                                            "New-ItemProperty -Path 'HKLM:\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Winlogon' -Name DefaultPassword -Value ",
+                                            {
+                                                "Ref" : "DomainAdminPassword"
+                                            },
+                                            "\""
+                                        ]
+                                    ]
+                                },
+                                "waitAfterCompletion" : "0"
+                            },
+                            "d-reboot"                                   : {
+                                "command" : {
+                                    "Fn::Join" : [
+                                        "",
+                                        [
+                                            "powershell.exe -Command Restart-Computer -Force"
+                                        ]
+                                    ]
+                                },
+                                "waitAfterCompletion" : "forever"
+                            }
+                        }
+                    },
+                    "configsql"  : {
+                        "files" : {
+                            "c:\\cfn\\scripts\\MaxDOP.sql"    : {
+                                "source" : "https://s3.amazonaws.com/microsoft_windows/scripts/MaxDOP.sql"
+                            }
+                        },
+                        "commands" : {
+                            "a-reboot"             : {
+                                "command" : {
+                                    "Fn::Join" : [
+                                        "",
+                                        [
+                                            "powershell.exe -Command Restart-Computer -Force"
+                                        ]
+                                    ]
+                                },
+                                "waitAfterCompletion" : "forever"
+                            }
+                        }
+                    },
+                    "finalize"   : {
+                        "commands" : {
+                            "a-cleanup-registry" : {
+                                "command" : {
+                                    "Fn::Join" : [
+                                        "",
+                                        [
+                                            "powershell.exe -Command ",
+                                            "\"Remove-ItemProperty -Path 'HKLM:\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Winlogon' -Name AutoAdminLogon",
+                                            ";",
+                                            "Remove-ItemProperty -Path 'HKLM:\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Winlogon' -Name DefaultUserName",
+                                            ";",
+                                            "Remove-ItemProperty -Path 'HKLM:\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Winlogon' -Name DefaultPassword",
+                                            "\""
+                                        ]
+                                    ]
+                                },
+                                "waitAfterCompletion" : "0"
+                            },
+                            "b-signal-success"   : {
+                                "command" : {
+                                    "Fn::Join" : [
+                                        "",
+                                        [
+                                            "cfn-signal.exe -e 0 \"",
+                                            {
+                                                "Ref" : "SQL3WaitHandle"
+                                            },
+                                            "\""
+                                        ]
+                                    ]
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "Properties" : {
+                "ImageId" : {
+                    "Fn::FindInMap" : [
+                        "AWSRegionArch2AMI",
+                        {
+                            "Ref" : "AWS::Region"
+                        },
+                        {
+                            "Fn::FindInMap" : [
+                                "AWSInstanceType2Arch",
+                                {
+                                    "Ref" : "SQL3InstanceType"
+                                },
+                                "Arch"
+                            ]
+                        }
+                    ]
+                },
+                "InstanceType" : {
+                    "Ref" : "SQL3InstanceType"
+                },
+                "EbsOptimized" : "false",
+                "NetworkInterfaces" : [
+                    {
+                        "DeleteOnTermination" : "true",
+                        "DeviceIndex"         : 0,
+                        "SubnetId"            : {
+                            "Ref" : "InfraSubnet2Id"
+                        },
+                        "PrivateIpAddresses"  : [
+                            {
+                                "Primary" : "true",
+                                "PrivateIpAddress" : {
+                                    "Ref" : "SQL3PrivateIp"
+                                }
+                            }
+                        ],
+                        "GroupSet"            : [
+                            {
+                                "Ref" : "DomainMemberSGID"
+                            },
+                            {
+                                "Ref" : "SQLSecurityGroup"
+                            },
+                            {
+                                "Ref" : "SQLClientSecurityGroup"
+                            }
+                        ]
+                    }
+                ],
+                "Tags"              : [
+                    {
+                        "Key" : "Name",
+                        "Value" : {
+                            "Ref" : "SQL3NetBIOSName"
+                        }
+                    }
+                ],
+                "BlockDeviceMappings" : [
+                    {
+                        "DeviceName" : "/dev/sda1",
+                        "Ebs"        : {
+                            "VolumeSize" : "50",
+                            "VolumeType" : "gp2"
+                        }
+                    }
+                ],                
+                "KeyName"             : {
+                    "Ref" : "KeyPairName"
+                },
+                "UserData"            : {
+                    "Fn::Base64" : {
+                        "Fn::Join" : [
+                            "",
+                            [
+                                "<script>\n",
+                                "cfn-init.exe -v -c config -s ",
+                                {
+                                    "Ref" : "AWS::StackId"
+                                },
+                                " -r SQL3 ",
+                                " --region ",
+                                {
+                                    "Ref" : "AWS::Region"
+                                },
+                                "\n",
+                                "</script>"
+                            ]
+                        ]
+                    }
+                }
+            }
+        },       
+        "SQLSecurityGroup"      : {
+            "Type" : "AWS::EC2::SecurityGroup",
+            "Properties" : {
+                "GroupDescription" : "Enable the SQL and SQL AlwaysOn Availability Group communications",
+                "VpcId"            : {
+                    "Ref" : "VPC"
+                },
+                "SecurityGroupIngress" : [
+                    {
+                        "IpProtocol" : "icmp",
+                        "FromPort"   : "-1",
+                        "ToPort"     : "-1",
+                        "CidrIp"     : {
+                            "Ref" : "Infra1CIDR"
+                        }
+                    },
+                    {
+                        "IpProtocol" : "icmp",
+                        "FromPort"   : "-1",
+                        "ToPort"     : "-1",
+                        "CidrIp"     : {
+                            "Ref" : "Infra2CIDR"
+                        }
+                    },
+                    {
+                        "IpProtocol" : "tcp",
+                        "FromPort"   : "135",
+                        "ToPort"     : "135",
+                        "CidrIp"     : {
+                            "Ref" : "Infra1CIDR"
+                        }
+                    },
+                    {
+                        "IpProtocol" : "tcp",
+                        "FromPort"   : "135",
+                        "ToPort"     : "135",
+                        "CidrIp"     : {
+                            "Ref" : "Infra2CIDR"
+                        }
+                    },
+                    {
+                        "IpProtocol" : "tcp",
+                        "FromPort"   : "137",
+                        "ToPort"     : "137",
+                        "CidrIp"     : {
+                            "Ref" : "Infra1CIDR"
+                        }
+                    },
+                    {
+                        "IpProtocol" : "tcp",
+                        "FromPort"   : "137",
+                        "ToPort"     : "137",
+                        "CidrIp"     : {
+                            "Ref" : "Infra2CIDR"
+                        }
+                    },
+                    {
+                        "IpProtocol" : "tcp",
+                        "FromPort"   : "445",
+                        "ToPort"     : "445",
+                        "CidrIp"     : {
+                            "Ref" : "Infra1CIDR"
+                        }
+                    },
+                    {
+                        "IpProtocol" : "tcp",
+                        "FromPort"   : "445",
+                        "ToPort"     : "445",
+                        "CidrIp"     : {
+                            "Ref" : "Infra2CIDR"
+                        }
+                    },
+                    {
+                        "IpProtocol" : "tcp",
+                        "FromPort"   : "1433",
+                        "ToPort"     : "1433",
+                        "CidrIp"     : {
+                            "Ref" : "Infra1CIDR"
+                        }
+                    },
+                    {
+                        "IpProtocol" : "tcp",
+                        "FromPort"   : "1433",
+                        "ToPort"     : "1433",
+                        "CidrIp"     : {
+                            "Ref" : "Infra2CIDR"
+                        }
+                    },
+                    {
+                        "IpProtocol" : "tcp",
+                        "FromPort"   : "3343",
+                        "ToPort"     : "3343",
+                        "CidrIp"     : {
+                            "Ref" : "Infra1CIDR"
+                        }
+                    },
+                    {
+                        "IpProtocol" : "tcp",
+                        "FromPort"   : "3343",
+                        "ToPort"     : "3343",
+                        "CidrIp"     : {
+                            "Ref" : "Infra2CIDR"
+                        }
+                    },
+                    {
+                        "IpProtocol" : "tcp",
+                        "FromPort"   : "5022",
+                        "ToPort"     : "5022",
+                        "CidrIp"     : {
+                            "Ref" : "Infra1CIDR"
+                        }
+                    },
+                    {
+                        "IpProtocol" : "tcp",
+                        "FromPort"   : "5022",
+                        "ToPort"     : "5022",
+                        "CidrIp"     : {
+                            "Ref" : "Infra2CIDR"
+                        }
+                    },
+                    {
+                        "IpProtocol" : "tcp",
+                        "FromPort"   : "5985",
+                        "ToPort"     : "5985",
+                        "CidrIp"     : {
+                            "Ref" : "Infra1CIDR"
+                        }
+                    },
+                    {
+                        "IpProtocol" : "tcp",
+                        "FromPort"   : "5985",
+                        "ToPort"     : "5985",
+                        "CidrIp"     : {
+                            "Ref" : "Infra2CIDR"
+                        }
+                    },
+                    {
+                        "IpProtocol" : "tcp",
+                        "FromPort"   : "49152",
+                        "ToPort"     : "65535",
+                        "CidrIp"     : {
+                            "Ref" : "Infra1CIDR"
+                        }
+                    },
+                    {
+                        "IpProtocol" : "tcp",
+                        "FromPort"   : "49152",
+                        "ToPort"     : "65535",
+                        "CidrIp"     : {
+                            "Ref" : "Infra2CIDR"
+                        }
+                    },
+                    {
+                        "IpProtocol" : "udp",
+                        "FromPort"   : "137",
+                        "ToPort"     : "137",
+                        "CidrIp"     : {
+                            "Ref" : "Infra1CIDR"
+                        }
+                    },
+                    {
+                        "IpProtocol" : "udp",
+                        "FromPort"   : "137",
+                        "ToPort"     : "137",
+                        "CidrIp"     : {
+                            "Ref" : "Infra2CIDR"
+                        }
+                    },
+                    {
+                        "IpProtocol" : "udp",
+                        "FromPort"   : "3343",
+                        "ToPort"     : "3343",
+                        "CidrIp"     : {
+                            "Ref" : "Infra1CIDR"
+                        }
+                    },
+                    {
+                        "IpProtocol" : "udp",
+                        "FromPort"   : "3343",
+                        "ToPort"     : "3343",
+                        "CidrIp"     : {
+                            "Ref" : "Infra2CIDR"
+                        }
+                    },
+                    {
+                        "IpProtocol" : "udp",
+                        "FromPort"   : "49152",
+                        "ToPort"     : "65535",
+                        "CidrIp"     : {
+                            "Ref" : "Infra1CIDR"
+                        }
+                    },
+                    {
+                        "IpProtocol" : "udp",
+                        "FromPort"   : "49152",
+                        "ToPort"     : "65535",
+                        "CidrIp"     : {
+                            "Ref" : "Infra2CIDR"
+                        }
+                    },
+                    {
+                        "IpProtocol" : "tcp",
+                        "FromPort"   : "1433",
+                        "ToPort"     : "1434",
+                        "CidrIp"     : {
+                            "Ref" : "Infra1CIDR"
+                        }
+                    },
+                    {
+                        "IpProtocol" : "tcp",
+                        "FromPort"   : "1433",
+                        "ToPort"     : "1434",
+                        "CidrIp"     : {
+                            "Ref" : "Infra2CIDR"
+                        }
+                    },
+                    {
+                        "IpProtocol" : "tcp",
+                        "FromPort"   : "1433",
+                        "ToPort"     : "1434",
+                        "CidrIp"     : {
+                            "Ref" : "Infra1CIDR"
+                        }
+                    },
+                    {
+                        "IpProtocol" : "tcp",
+                        "FromPort"   : "1433",
+                        "ToPort"     : "1434",
+                        "CidrIp"     : {
+                            "Ref" : "Infra2CIDR"
+                        }
+                    }
+                ]
+            }
+        },
+        "SQLClientSecurityGroup" : {
+            "Type" : "AWS::EC2::SecurityGroup",
+            "Properties" : {
+                "GroupDescription" : "Enable SQL Client Connections from instances inside the VPC",
+                "VpcId"            : {
+                    "Ref" : "VPC"
+                },
+                "SecurityGroupIngress" : [
+                    {
+                        "IpProtocol" : "tcp",
+                        "FromPort"   : "1433",
+                        "ToPort"     : "1433",
+                        "CidrIp"     : {
+                            "Ref" : "Infra1CIDR"
+                        }
+                    },
+                    {
+                        "IpProtocol" : "tcp",
+                        "FromPort"   : "1433",
+                        "ToPort"     : "1433",
+                        "CidrIp"     : {
+                            "Ref" : "Infra2CIDR"
+                        }
+                    }
+                ]
+            }
+        }
+    },
+    "Outputs"                  : {
+        "DomainAdmin" : {
+            "Value" : {
+                "Fn::Join" : [
+                    "",
+                    [
+                        {
+                            "Ref" : "DomainNetBIOSName"
+                        },
+                        "\\",
+                        {
+                            "Ref" : "DomainAdminUser"
+                        }
+                    ]
+                ]
+            },
+            "Description" : "Domain administrator account"
+        },
+        "LocalAdmin"  : {
+            "Value" : "Administrator",
+            "Description" : "Please retrieve Administrator password of the instance"
+        },
+        "SQL1NetBIOSName" : {
+            "Value" : {
+                "Ref" : "SQL1NetBIOSName"
+            },
+            "Description" : "NetBIOS name of the 1st SQL "
+        },
+        "SQL2NetBIOSName" : {
+            "Value" : {
+                "Ref" : "SQL2NetBIOSName"
+            },
+            "Description" : "NetBIOS name of the 2nd SQL "
+        }
+    }
+}
